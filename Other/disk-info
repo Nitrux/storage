@@ -24,20 +24,23 @@
 
 # Function to print a horizontal line
 print_line() {
-    printf "%-25s %-15s %-15s %-20s %-15s\n" "-------------------------" "---------------" "---------------" "----------------------" "---------------"
+    printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "-------------------------" "---------------" "---------------" "----------------------" "---------------" "---------------"
 }
 
 # Print header
 print_line
-printf "%-25s %-15s %-15s %-20s %-15s\n" "Device" "Size" "Used" "Mount Point" "Filesystem"
+printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "Device" "Size" "Used" "Mount Point" "Filesystem" "Label"
 print_line
 
-# Get df -h, lsblk, and mount information
-df_info=$(df -h --output=source,size,used,target | awk 'NR>1 {print $1, $2, $3, $4}' | sort)
-lsblk_info=$(lsblk --output NAME,SIZE,MOUNTPOINT --pairs | sed 's/"//g' | sort)
-mount_info=$(mount | awk '{print $1, $3}' | sort)
+# Get df -h information and filter relevant columns
+df_info=$(df -h --output=source,size,used,target --exclude-type=tmpfs,devtmpfs | awk 'NR>1 {print $1, $2, $3, $4}' | sort)
 
-# Combine the information using join and awk
-join -a1 -a2 -e "N/A" -o 0,1.2,1.3,2.2,2.4 <(echo "$df_info") <(echo "$lsblk_info") | sort | join -a1 -a2 -e "N/A" -o 0,1.2,1.3,1.4,2.2 - <(echo "$mount_info") | awk '{ printf "%-25s %-15s %-15s %-20s %-15s\n", substr($1, 1, 25), $2, $3, $4, $5 }'
+# Loop through df_info and get filesystem and label information using blkid command
+while read -r device size used mountpoint; do
+    filesystem=$(blkid -o value -s TYPE "$device" 2>/dev/null || echo "N/A")
+    label=$(blkid -o value -s LABEL "$device" 2>/dev/null || echo "N/A")
+    
+    printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "${device:0:25}" "$size" "$used" "${mountpoint:0:20}" "${filesystem:-N/A}" "${label:-N/A}"
+done <<< "$df_info"
 
 print_line
