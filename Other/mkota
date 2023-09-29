@@ -238,7 +238,7 @@ done
 
 			# -- Create the SquashFS file with zstd compression.
 
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /etc/ufw -e /etc/sudoers.d -e /etc/shadow -e /etc/shadow- -e /etc/security/opasswd -e /etc/iscsi/initiatorname.iscsi -e /etc/gshadow- -e /etc/gshadow -e /etc/docker/key.json -e /etc/default/cacerts -e /etc/cups/subscriptions.conf.O -e /etc/cups/subscriptions.conf -e /etc/.pwd.lock -e /etc/wireguard -e /etc/ssl/private  -e /etc/polkit-1/rules.d -e /etc/cups/ssl -e /etc/sudoers; then
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /etc/.pwd.lock -e /etc/cups/ssl -e /etc/cups/subscriptions.conf -e /etc/cups/subscriptions.conf.O -e /etc/default/cacerts -e /etc/default/grub -e /etc/docker/key.json -e /etc/fstab -e /etc/group -e /etc/gshadow -e /etc/gshadow- -e /etc/hostname -e /etc/hosts -e /etc/iscsi/initiatorname.iscsi -e /etc/passwd -e /etc/polkit-1/rules.d -e /etc/resolv.conf -e /etc/sddm.conf -e /etc/sddm.conf.d/kde_settings.conf -e /etc/security/opasswd -e /etc/shadow -e /etc/shadow- -e /etc/ssl/private -e /etc/subgid -e /etc/subuid -e /etc/sudoers -e /etc/sudoers.d -e /etc/timezone -e /etc/ufw; then
 				puts_success "SquashFS file created successfully."
 			else
 				puts_error "Failed to create SquashFS file."
