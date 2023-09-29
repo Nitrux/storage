@@ -236,9 +236,9 @@ done
 			DEST_FILE="ota-$(date +%Y.%m.%d-%H.%M)-amd64.squashfs"
 
 
-			# -- Create the SquashFS file with zstd compression, compression level 22, and block size 1048576.
+			# -- Create the SquashFS file with zstd compression.
 
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory; then
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /etc/ufw -e /etc/sudoers.d -e /etc/shadow -e /etc/shadow- -e /etc/security/opasswd -e /etc/iscsi/initiatorname.iscsi -e /etc/gshadow- -e /etc/gshadow -e /etc/docker/key.json -e /etc/default/cacerts -e /etc/cups/subscriptions.conf.O -e /etc/cups/subscriptions.conf -e /etc/.pwd.lock -e /etc/wireguard -e /etc/ssl/private  -e /etc/polkit-1/rules.d -e /etc/cups/ssl -e /etc/sudoers; then
 				puts_success "SquashFS file created successfully."
 			else
 				puts_error "Failed to create SquashFS file."
