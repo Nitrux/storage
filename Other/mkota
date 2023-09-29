@@ -260,7 +260,7 @@ done
 
 			# -- Display the size of the SquashFS file.
 
-			puts_success "Size of the SquashFS file:"
+			puts_info "Size of the SquashFS file:"
 			du -sh "$DEST_FILE"
 
 			shift;;
