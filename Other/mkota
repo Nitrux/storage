@@ -1,0 +1,265 @@
+#!/bin/bash
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+
+# -- Exit on errors.
+
+set -eu
+
+
+# -- Set program name and version.
+
+TOOL_NAME="OTA Creation Tool"
+TOOL_SHRT_NAME="mkota"
+TOOL_VERSION="$(md5sum /usr/bin/mkota | cut -c -32)"
+VENDOR='Nitrux Latinoamericana S.C.'
+FECHA=$(date +%Y)
+
+
+# -- Print informative messages to stderr.
+
+puts_info() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[34mInfo:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print success messages to stderr.
+
+puts_success() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[32mSuccess:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print error messages to stderr.
+
+puts_error() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[31mError:\e[0m %b\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print messages or text using multiple lines to stderr.
+
+print_message() {
+	if [ -n "$1" ]; then
+		printf "%s\n" "$@" >&2
+	fi
+}
+
+
+# -- Print warning messages to stderr.
+
+puts_warning() {
+    if [ -n "$1" ]; then
+        printf "%s: \e[33mWarning:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+    fi
+}
+
+
+# -- Check if this is running as root.
+# -- Exit if not running as root.
+
+if [ "$(id -u)" -ne 0 ]; then
+	puts_error "$TOOL_NAME is not running as root, quitting."
+	exit 1
+else
+	puts_success "$TOOL_NAME is running as root, continuing..."
+	ROOT="sudo"
+fi
+
+
+# -- Check if any arguments are passed
+
+if [ $# -eq 0 ]; then
+    puts_error "No arguments provided to $TOOL_NAME, quitting."
+    exit 1
+fi
+
+
+# -- Display an error when no flag is used.
+
+error () {
+  puts_error "$TOOL_SHRT_NAME: \e[31mError:\e[0m: $*" >&2
+  exit 1
+}
+
+
+# -- Ensure dialog is installed.
+
+if ! command -v dialog >/dev/null 2>&1; then
+    echo "Error: 'dialog' command not found. Please install dialog and try again."
+    exit 1
+fi
+
+
+# -- Functions.
+
+mksqs() {
+    local ROOT=("sudo" "mksquashfs" "$@")
+
+    if ! command -v "${ROOT[0]}" >/dev/null 2>&1; then
+        puts_error "Error: '${ROOT[0]}' command not found. Please make sure it's installed and try again."
+        return 1
+    fi
+
+    "${ROOT[@]}"
+}
+
+unsqs() {
+    local ROOT=("sudo" "unsquashfs" "$@")
+
+    if ! command -v "${ROOT[0]}" >/dev/null 2>&1; then
+        puts_error "Error: '${ROOT[0]}' command not found. Please make sure it's installed and try again."
+        return 1
+    fi
+
+    "${ROOT[@]}"
+}
+
+
+# -- Use a log file.
+# -- Everything below will go to the file nuts.log.
+
+if [ -f "/var/log/mkota.log" ]; then
+	puts_info "$TOOL_NAME log file found, skipping..."
+else
+	puts_info "Unable to locate $TOOL_NAME log file. Creating a new log file, continuing..."
+fi
+
+
+#   ====== START ======
+
+# -- Flag parsing.
+
+for cmd; do
+	case "$cmd" in
+		-h | --help )
+			print_message "$TOOL_NAME" \
+				"" \
+				"Description:" \
+				"" \
+				"    $TOOL_NAME or $TOOL_SHRT_NAME is a utility to create OTA-style files using the SquashFS archiving format for Nitrux OS." \
+				"    ⚠️ Important: $TOOL_SHRT_NAME is intended to work exclusively in Nitrux OS, and using this utility in other distributions will break them or not work at all." \
+				"" \
+				"    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues." \
+				"" \
+				"Flags:" \
+				"    -h or --help                 Show this help." \
+				"    -v or --version              Show the version." \
+				"    -d or --debug                Enable verbose output." \
+				"" \
+				"Operations:" \
+				"    create            Update the currently installed root using the media specified in nuts-query and creates a backup of the current root directory." \
+				"" \
+				"Usage:" \
+				"    sudo mkota <flag> (operation)" \
+				"" \
+				"Examples:" \
+				"    sudo mkota create" \
+				"    sudo mkota -d create"
+				
+			exit
+			;;
+
+		-v | --version )
+			print_message "$TOOL_NAME" \
+				"" \
+				"Version: $TOOL_VERSION from branch ""$NUTS_BRANCH""." \
+				"" \
+				"The license used for this file and its contents is: BSD-3-Clause." \
+				"" \
+				"Authors:" \
+				"" \
+				"    Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>" \
+				"" \
+				"(c) $FECHA Some Rights Reserved. Made by $VENDOR"
+
+			exit
+			;;
+
+		-d | --debug )
+			set -x
+			shift
+			;;
+	esac
+done
+
+
+( for cmd; do
+	case "$cmd" in
+		'' )  error "No operation specified (use -h to see a list of operations).";;
+
+		create )
+
+			# -- Prompt the user for directories to include.
+
+			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces:"
+			read -r -a ITEMS
+
+
+			# -- Check if user input is empty.
+
+			if [[ ${#ITEMS[@]} -eq 0 ]]; then
+				puts_error "No directories or files specified. Exiting."
+				exit 1
+			fi
+
+
+			# -- Define the destination SquashFS file name using the specified format.
+
+			DEST_FILE="ota-$(date +%Y.%m.%d-%H.%M)-amd64.squashfs"
+
+
+			# -- Create the SquashFS file with zstd compression, compression level 22, and block size 1048576.
+
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory; then
+				puts_success "SquashFS file created successfully."
+			else
+				puts_error "Failed to create SquashFS file."
+				exit 1
+			fi
+
+
+			# -- Display the contents of the SquashFS file.
+
+			puts_info "Contents of the SquashFS file:"
+			unsqs -l "$DEST_FILE"
+
+
+			# -- Display the MD5 sum of the SquashFS file.
+
+			puts_info "MD5 sum of the SquashFS file:"
+			md5sum "$DEST_FILE"
+
+			shift;;
+	esac
+done ) 2>&1 | tee -a "/var/log/mkota.log"
+
+
+#   ====== END ======
