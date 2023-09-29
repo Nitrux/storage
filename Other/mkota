@@ -249,7 +249,7 @@ done
 			# -- Display the contents of the SquashFS file.
 
 			puts_info "Contents of the SquashFS file:"
-			unsqs -l "$DEST_FILE" | tee contents.txt
+			unsqs -l "$DEST_FILE" | tee "$DEST_FILE.contents"
 
 
 			# -- Display the MD5 sum of the SquashFS file.
