@@ -257,6 +257,12 @@ done
 			puts_info "MD5 sum of the SquashFS file:"
 			md5sum "$DEST_FILE"
 
+
+			# -- Display the size of the SquashFS file.
+
+			puts_success "Size of the SquashFS file:"
+			du -sh "$DEST_FILE"
+
 			shift;;
 	esac
 done ) 2>&1 | tee -a "/var/log/mkota.log"
