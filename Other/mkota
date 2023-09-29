@@ -144,7 +144,7 @@ unsqs() {
 
 
 # -- Use a log file.
-# -- Everything below will go to the file nuts.log.
+# -- Everything below will go to the file mkota.log.
 
 if [ -f "/var/log/mkota.log" ]; then
 	puts_info "$TOOL_NAME log file found, skipping..."
@@ -175,7 +175,7 @@ for cmd; do
 				"    -d or --debug                Enable verbose output." \
 				"" \
 				"Operations:" \
-				"    create            Update the currently installed root using the media specified in nuts-query and creates a backup of the current root directory." \
+				"    create            Initializes the process to create an OTA-style SquashFS file." \
 				"" \
 				"Usage:" \
 				"    sudo mkota <flag> (operation)" \
@@ -190,7 +190,7 @@ for cmd; do
 		-v | --version )
 			print_message "$TOOL_NAME" \
 				"" \
-				"Version: $TOOL_VERSION from branch ""$NUTS_BRANCH""." \
+				"Version: $TOOL_VERSION." \
 				"" \
 				"The license used for this file and its contents is: BSD-3-Clause." \
 				"" \
