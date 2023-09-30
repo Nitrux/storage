@@ -142,6 +142,15 @@ unsqs() {
     "${ROOT[@]}"
 }
 
+check_etc_paths() {
+    for item in "$@"; do
+        if [[ $item == /etc* ]]; then
+            puts_error "Paths from /etc are not allowed initially. Exiting."
+            exit 1
+        fi
+    done
+}
+
 
 # -- Use a log file.
 # -- Everything below will go to the file mkota.log.
@@ -219,8 +228,9 @@ done
 
 			# -- Prompt the user for directories to include.
 
-			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces:"
+			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces (excluding /etc paths):"
 			read -r -a ITEMS
+			check_etc_paths "${ITEMS[@]}"
 
 
 			# -- Check if user input is empty.
@@ -238,43 +248,7 @@ done
 
 			# -- Create the SquashFS file with zstd compression.
 
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory \
-				-e /etc/.pwd.lock \
-				-e /etc/cups/ssl \
-				-e /etc/cups/subscriptions.conf \
-				-e /etc/cups/subscriptions.conf.O \
-				-e /etc/default/cacerts \
-				-e /etc/default/grub \
-				-e /etc/docker/key.json \
-				-e /etc/fstab \
-				-e /etc/group \
-				-e /etc/group- \
-				-e /etc/gshadow \
-				-e /etc/gshadow- \
-				-e /etc/hostname \
-				-e /etc/hosts \
-				-e /etc/iscsi/initiatorname.iscsi \
-				-e /etc/passwd \
-				-e /etc/passwd- \
-				-e /etc/polkit-1/rules.d \
-				-e /etc/resolv.conf \
-				-e /etc/samba \
-				-e /etc/sddm.conf \
-				-e /etc/sddm.conf.d \
-				-e /etc/security/opasswd \
-				-e /etc/shadow \
-				-e /etc/shadow- \
-				-e /etc/ssl/private \
-				-e /etc/subgid \
-				-e /etc/subgid- \
-				-e /etc/subuid \
-				-e /etc/subuid- \
-				-e /etc/sudoers \
-				-e /etc/sudoers.d \
-				-e /etc/timezone \
-				-e /etc/ufw \
-				-e /etc/wireguard \
-				-e /etc/wpa_supplicant; then
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory; then
 				puts_success "SquashFS file created successfully."
 			else
 				puts_error "Failed to create SquashFS file."
