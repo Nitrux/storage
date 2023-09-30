@@ -145,7 +145,7 @@ unsqs() {
 check_etc_paths() {
     for item in "$@"; do
         if [[ $item == /etc* ]]; then
-            puts_error "Paths from /etc are not allowed initially. Exiting."
+            puts_error "Paths from /etc are not allowed. Exiting."
             exit 1
         fi
     done
