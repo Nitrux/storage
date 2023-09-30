@@ -249,7 +249,7 @@ done
 
 			# -- Create the SquashFS file with zstd compression.
 
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory; then
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr; then
 				puts_success "SquashFS file created successfully."
 			else
 				puts_error "Failed to create SquashFS file."
