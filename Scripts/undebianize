@@ -71,7 +71,13 @@ if [[ ! -d "$NM_OG_DIR" ]]; then
 fi
 
 mkdir -p "$NM_NX_DIR"
-mv "$NM_OG_DIR"/* "$NM_NX_DIR"/
+
+if [[ $(find "$NM_OG_DIR" -maxdepth 1 -type f | wc -l) -gt 0 ]]; then
+    mv "$NM_OG_DIR"/* "$NM_NX_DIR"/
+else
+    echo "No files found in $NM_OG_DIR to move."
+fi
+
 rmdir "$NM_OG_DIR"
 ln -sv "$NM_NX_DIR" "$NM_OG_DIR"
 
