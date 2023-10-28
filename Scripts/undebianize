@@ -62,12 +62,21 @@ deluser --remove-home nitrux
 
 #   "Fix" for https://github.com/Nitrux/nitrux-bug-tracker/issues/124
 
-SRC="/etc/NetworkManager/system-connections"
-DEST="/var/lib/NetworkManager/system-connections"
+NM_OG_DIR="/etc/NetworkManager/system-connections"
+NM_NX_DIR="/var/lib/NetworkManager/system-connections"
 
-mkdir -p "$DEST"
-mv "$SRC"/* "$DEST"/
-rmdir "$SRC"
-ln -sv "$DEST" "$SRC"
+if [[ ! -d "$NM_OG_DIR" ]]; then
+    echo "Directory $NM_OG_DIR does not exist. Creating it..."
+    mkdir -p "$NM_OG_DIR"
+fi
 
-exit 0
+mkdir -p "$NM_NX_DIR"
+mv "$NM_OG_DIR"/* "$NM_NX_DIR"/
+rmdir "$NM_OG_DIR"
+ln -sv "$NM_NX_DIR" "$NM_OG_DIR"
+
+if [[ "$(readlink "$NM_OG_DIR")" == "$NM_NX_DIR" ]]; then
+    echo "Verification successful: $NM_OG_DIR is a symbolic link to $NM_NX_DIR."
+else
+    echo "Verification failed: $NM_OG_DIR is not a symbolic link to $NM_NX_DIR."
+fi
