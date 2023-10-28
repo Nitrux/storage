@@ -58,31 +58,3 @@ find /usr/share/locale/ -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
 #   doesn't actually do that, so let's brute force that.
 
 deluser --remove-home nitrux
-
-
-#   "Fix" for https://github.com/Nitrux/nitrux-bug-tracker/issues/124
-
-NM_OG_DIR="/etc/NetworkManager/system-connections"
-NM_NX_DIR="/var/lib/NetworkManager/system-connections"
-
-if [[ ! -d "$NM_OG_DIR" ]]; then
-    echo "Directory $NM_OG_DIR does not exist. Creating it..."
-    mkdir -p "$NM_OG_DIR"
-fi
-
-mkdir -p "$NM_NX_DIR"
-
-if [[ $(find "$NM_OG_DIR" -maxdepth 1 -type f | wc -l) -gt 0 ]]; then
-    mv "$NM_OG_DIR"/* "$NM_NX_DIR"/
-else
-    echo "No files found in $NM_OG_DIR to move."
-fi
-
-rmdir "$NM_OG_DIR"
-ln -sv "$NM_NX_DIR" "$NM_OG_DIR"
-
-if [[ "$(readlink "$NM_OG_DIR")" == "$NM_NX_DIR" ]]; then
-    echo "Verification successful: $NM_OG_DIR is a symbolic link to $NM_NX_DIR."
-else
-    echo "Verification failed: $NM_OG_DIR is not a symbolic link to $NM_NX_DIR."
-fi
