@@ -16,7 +16,7 @@ REMOVE_DEB_BITS_PKGS='
 dpkg_force_remove $REMOVE_DEB_BITS_PKGS
 
 
-#   Remove dpkg directories.
+#   Remove dpkg stuff.
 
 REMOVE_DPKG='
     /etc/alternatives/README
