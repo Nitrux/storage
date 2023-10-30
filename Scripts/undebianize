@@ -43,6 +43,7 @@ REMOVE_DPKG='
     /var/cache/apt
     /var/lib/apt/lists
     /var/lib/dpkg/
+    /var/log/dpkg.log
 '
 
 rm -rf ${REMOVE_DPKG//\\n/ } || true
