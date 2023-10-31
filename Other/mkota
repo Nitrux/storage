@@ -227,9 +227,10 @@ done
 		create )
 
 			# -- Prompt the user for directories to include.
-			# -- For some inexplicable reason /etc, we can't add it to a SquashFS archive.
+			# -- For some inexplicable reason we can't add /etc to a SquashFS archive.
 
 			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces (excluding /etc paths):"
+			puts_info "Here are some suggestions/examples: /Applications /boot /usr /installed_pkgs_end.txt"
 			read -r -a ITEMS
 			check_etc_paths "${ITEMS[@]}"
 
