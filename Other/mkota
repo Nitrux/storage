@@ -227,7 +227,7 @@ done
 		create )
 
 			# -- Prompt the user for directories to include.
-			# -- For some inexplicable reason we can't add /etc to a SquashFS archive.
+			# -- For some inexplicable reason we can't add /etc to an SquashFS archive.
 
 			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces (excluding /etc paths):"
 			puts_info "Here are some suggestions/examples: /Applications /boot /usr /installed_pkgs_end.txt"
@@ -250,7 +250,7 @@ done
 
 			# -- Create the SquashFS file with zstd compression.
 
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr; then
+			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr -e /boot/efi -e /boot/grub; then
 				puts_success "SquashFS file created successfully."
 			else
 				puts_error "Failed to create SquashFS file."
