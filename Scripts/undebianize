@@ -60,3 +60,10 @@ find /usr/share/locale/ -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
 #   doesn't actually do that, so let's brute force that.
 
 deluser --remove-home nitrux
+
+
+#   Run update-grub because, for some "reason," the parameter "ro" is added to the GRUB menu entries.
+#   This parameter completely fucks up the overlay and renders the system unusable.
+#   We've replaced update-grub in the ISO with a custom version that removes the parameter after generating the menu file.
+
+update-grub
