@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #############################################################################################################################################################################
 #   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
@@ -22,35 +22,47 @@
 #    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
 #############################################################################################################################################################################
 
+
 set -eu
 
+# -- Functions.
 
-# -- Function to print a horizontal line.
+is_broken_link() {
+    [[ ! -e "$1" ]]
+}
 
-print_line() {
-    printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "-------------------------" "---------------" "---------------" "----------------------" "---------------" "---------------"
+trim_path() {
+    local path="$1"
+    echo "${path}" | rev | cut -d'/' -f1-3 | rev
 }
 
 
-# -- Print header.
+# -- Prompt user for the directory.
 
-print_line
-printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "Device" "Size" "Used" "Mount Point" "Filesystem" "Label"
-print_line
+read -rp "Enter the directory path: " dir
 
 
-# -- Get df -h information and filter relevant columns.
+# -- Determine the appropriate column widths.
 
-df_info=$(df -h --output=source,size,used,target --exclude-type=tmpfs,devtmpfs | awk 'NR>1 {print $1, $2, $3, $4}' | sort)
+symlink_col_width=70
+target_col_width=70
+status_col_width=10
 
 
-# -- Loop through df_info and get filesystem and label information using blkid command.
+# -- Header for the output.
 
-while read -r device size used mountpoint; do
-    filesystem=$(blkid -o value -s TYPE "$device" 2>/dev/null || echo "N/A")
-    label=$(blkid -o value -s LABEL "$device" 2>/dev/null || echo "N/A")
-    
-    printf "%-25s %-15s %-15s %-20s %-15s %-15s\n" "${device:0:25}" "$size" "$used" "${mountpoint:0:20}" "${filesystem:-N/A}" "${label:-N/A}"
-done <<< "$df_info"
+printf "%-${symlink_col_width}s %-${target_col_width}s %-${status_col_width}s\n" "Symlink" "Target" "Status"
+printf '%.0s-' {1..150}
+printf '\n'
 
-print_line
+find "$dir" -type l -print0 | while IFS= read -r -d '' file; do
+    trimmed_symlink_path=$(trim_path "$file")
+    target=$(readlink -f "$file")
+    trimmed_target_path=$(trim_path "$target")
+
+    if is_broken_link "$file"; then
+        printf "\e[1;31m%-${symlink_col_width}s %-${target_col_width}s %-${status_col_width}s\e[0m\n" "$trimmed_symlink_path" "$trimmed_target_path" "BROKEN"
+    else
+        printf "\e[1;32m%-${symlink_col_width}s %-${target_col_width}s %-${status_col_width}s\e[0m\n" "$trimmed_symlink_path" "$trimmed_target_path" "OK"
+    fi
+done

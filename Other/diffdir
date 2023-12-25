@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+
+# -- Exit on errors.
+
+set -euo pipefail
+
+
+# -- Function to display help and usage information.
+
+display_help() {
+    echo "Usage: $0 [option] [arguments]"
+    echo ""
+    echo "Options:"
+    echo "  -g, --generate [directory]   Generate a file list from the specified directory."
+    echo "  -c, --compare [file1] [file2] Compare two existing file lists and list differences."
+    echo "  -h, --help                   Display this help message."
+    echo ""
+    echo "Examples:"
+    echo "  $0 -g /Applications  # Generate file list for /Applications"
+    echo "  $0 -c list1.txt list2.txt  # Compare file lists list1.txt and list2.txt"
+}
+
+
+# -- Function to generate a file list with path, checksum, timestamp, and size.
+
+generate_file_list() {
+    local dir=$1
+    local file_list_path
+
+    # Check if the file already exists
+    base_name="file_list_$(basename "$dir").txt"
+    file_list_path="$(pwd)/$base_name"
+
+    i=2
+    while [ -e "$file_list_path" ]; do
+        file_list_path="$(pwd)/file_list_$(basename "$dir")_${i}.txt"
+        ((i++))
+    done
+
+    cd "$dir" || exit 1
+
+    find . -type f -exec sh -c 'for file; do printf "%s  %s\n" "$(md5sum "$file" | cut -d " " -f 1)" "'"$dir"'/${file#./}"; done' sh {} + > "$file_list_path"
+
+    echo "Generated file list at $file_list_path"
+}
+
+
+# -- Function to normalize paths.
+
+normalize_paths() {
+    local original_list=$1
+    local normalized_list=$2
+    sed 's/\.wiki\.2\//\.wiki\//' "$original_list" | sort > "$normalized_list"
+}
+
+
+# -- Function to compare file lists and generate a list of differences.
+
+compare_file_lists() {
+    local list1=$1
+    local list2=$2
+    local diff_list_path
+    local temp_diff_checksums
+    local temp_diff_unique
+    local norm_list1
+    local norm_list2
+
+    diff_list_path="$(pwd)/dir_diff_list.txt"
+    temp_diff_checksums=$(mktemp)
+    temp_diff_unique=$(mktemp)
+    norm_list1=$(mktemp)
+    norm_list2=$(mktemp)
+
+    normalize_paths "$list1" "$norm_list1"
+    normalize_paths "$list2" "$norm_list2"
+
+    while IFS= read -r line; do
+        checksum=$(echo "$line" | cut -d ' ' -f 1)
+        filepath=$(echo "$line" | cut -d ' ' -f 2-)
+        if grep -q "$filepath" "$norm_list2"; then
+            if ! grep -q "$checksum $filepath" "$norm_list2"; then
+                echo "$line" >> "$temp_diff_checksums"
+            fi
+        else
+            echo "$line" >> "$temp_diff_unique"
+        fi
+    done < "$norm_list1"
+
+    rm "$diff_list_path"
+
+    {
+        echo "##### File(s) with different checksum that exist in both lists"
+        cat "$temp_diff_checksums"
+        echo ""
+        echo "##### File(s) found in list #1 but not in list #2"
+        cat "$temp_diff_unique"
+    } >> "$diff_list_path"
+
+    rm "$temp_diff_checksums" "$temp_diff_unique" "$norm_list1" "$norm_list2"
+
+    if [ -s "$diff_list_path" ]; then
+        echo "Differences have been found and listed in $diff_list_path"
+    else
+        echo "No differences found."
+    fi
+}
+
+
+# -- Main script logic based on flag.
+
+while (( "$#" )); do
+    case "$1" in
+        -d|--debug)
+            set -x
+            shift
+            ;;
+
+        -g|--generate)
+            if [ -z "$2" ]; then
+                echo "Error: No directory specified for file list generation."
+                echo ""
+                display_help
+                exit 1
+            fi
+            generate_file_list "$2"
+            exit 0
+            ;;
+
+        -c|--compare)
+            if [ $# -lt 3 ]; then
+                echo "Error: Two file lists must be specified for comparison."
+                echo ""
+                display_help
+                exit 1
+            fi
+            compare_file_lists "$2" "$3"
+            exit 0
+            ;;
+
+        -h|--help)
+            display_help
+            exit 0
+            ;;
+
+        *)
+            echo "Error: Invalid option."
+            echo ""
+            display_help
+            exit 1
+            ;;
+    esac
+done

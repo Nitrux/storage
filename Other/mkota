@@ -32,7 +32,7 @@ set -eu
 
 TOOL_NAME="OTA Creation Tool"
 TOOL_SHRT_NAME="mkota"
-TOOL_VERSION="$(md5sum /usr/bin/mkota | cut -c -32)"
+TOOL_VERSION="0.0.1_$(date +%Y%m%d)"
 VENDOR='Nitrux Latinoamericana S.C.'
 FECHA=$(date +%Y)
 
@@ -82,15 +82,11 @@ puts_warning() {
 }
 
 
-# -- Check if this is running as root.
-# -- Exit if not running as root.
+# -- Check if any arguments are passed.
 
-if [ "$(id -u)" -ne 0 ]; then
-	puts_error "$TOOL_NAME is not running as root, quitting."
-	exit 1
-else
-	puts_success "$TOOL_NAME is running as root, continuing..."
-	ROOT="sudo"
+if [ $# -eq 0 ]; then
+    puts_error "No arguments provided to $TOOL_NAME, quitting."
+    exit 1
 fi
 
 
@@ -152,132 +148,122 @@ check_etc_paths() {
 }
 
 
-# -- Use a log file.
-# -- Everything below will go to the file mkota.log.
+# -- Use a log file. Check permissions and handle error.
 
-if [ -f "/var/log/mkota.log" ]; then
-	puts_info "$TOOL_NAME log file found, skipping..."
+LOG_FILE="/var/log/mkota.log"
+
+if [ -f "$LOG_FILE" ] || touch "$LOG_FILE" 2>/dev/null; then
+    if [ -w "$LOG_FILE" ]; then
+        puts_info "$TOOL_NAME log file ready for use."
+    else
+        puts_error "$TOOL_NAME does not have write permissions for $LOG_FILE."
+    fi
 else
-	puts_info "Unable to locate $TOOL_NAME log file. Creating a new log file, continuing..."
+    puts_error "Unable to create or locate $TOOL_NAME log file."
 fi
 
 
 #   ====== START ======
 
-# -- Flag parsing.
+# -- Flag parsing and main operational logic.
+(
+	while [ $# -gt 0 ]; do
+		case "$1" in
+				-h | --help )
+					print_message "$TOOL_NAME" \
+					"" \
+					"Description:" \
+					"" \
+					"    $TOOL_NAME or $TOOL_SHRT_NAME is a utility to create OTA-style files using the SquashFS archiving format for Nitrux OS." \
+					"    ⚠️ Important: $TOOL_SHRT_NAME is intended to work exclusively in Nitrux OS, and using this utility in other distributions will break them or not work at all." \
+					"" \
+					"    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues." \
+					"" \
+					"Flags:" \
+					"    -h or --help                 Show this help." \
+					"    -v or --version              Show the version." \
+					"    -d or --debug                Enable verbose output." \
+					"" \
+					"Operations:" \
+					"    create            Initializes the process to create an OTA-style SquashFS file." \
+					"" \
+					"Usage:" \
+					"    sudo mkota <flag> (operation)" \
+					"" \
+					"Examples:" \
+					"    sudo mkota create" \
+					"    sudo mkota -d create"
+					exit
+					;;
 
-for cmd; do
-	case "$cmd" in
-		-h | --help )
-			print_message "$TOOL_NAME" \
-				"" \
-				"Description:" \
-				"" \
-				"    $TOOL_NAME or $TOOL_SHRT_NAME is a utility to create OTA-style files using the SquashFS archiving format for Nitrux OS." \
-				"    ⚠️ Important: $TOOL_SHRT_NAME is intended to work exclusively in Nitrux OS, and using this utility in other distributions will break them or not work at all." \
-				"" \
-				"    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues." \
-				"" \
-				"Flags:" \
-				"    -h or --help                 Show this help." \
-				"    -v or --version              Show the version." \
-				"    -d or --debug                Enable verbose output." \
-				"" \
-				"Operations:" \
-				"    create            Initializes the process to create an OTA-style SquashFS file." \
-				"" \
-				"Usage:" \
-				"    sudo mkota <flag> (operation)" \
-				"" \
-				"Examples:" \
-				"    sudo mkota create" \
-				"    sudo mkota -d create"
-				
-			exit
-			;;
+				-v | --version )
+					print_message "$TOOL_NAME" \
+					"" \
+					"Version: $TOOL_VERSION." \
+					"" \
+					"The license used for this program is: BSD-3-Clause." \
+					"" \
+					"Authors:" \
+					"" \
+					"    Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>" \
+					"" \
+					"(c) $FECHA Some Rights Reserved. Made by $VENDOR"
+					exit
+					;;
 
-		-v | --version )
-			print_message "$TOOL_NAME" \
-				"" \
-				"Version: $TOOL_VERSION." \
-				"" \
-				"The license used for this file and its contents is: BSD-3-Clause." \
-				"" \
-				"Authors:" \
-				"" \
-				"    Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>" \
-				"" \
-				"(c) $FECHA Some Rights Reserved. Made by $VENDOR"
+				-d | --debug )
+					set -x
+					shift
+					;;
 
-			exit
-			;;
+				create )
 
-		-d | --debug )
-			set -x
-			shift
-			;;
-	esac
-done
+					if [ "$(id -u)" -ne 0 ]; then
+						puts_error "$TOOL_NAME is not running as root, quitting."
+						exit 1
+					fi
 
+					shift
 
-( for cmd; do
-	case "$cmd" in
-		'' )  error "No operation specified (use -h to see a list of operations).";;
+					ITEMS=("$@")
 
-		create )
+					if [[ ${#ITEMS[@]} -eq 0 ]]; then
+						puts_error "No directories or files specified. Exiting."
+						exit 1
+					fi
 
-			# -- Prompt the user for directories to include.
-			# -- For some inexplicable reason we can't add /etc to an SquashFS archive.
+					check_etc_paths "${ITEMS[@]}"
 
-			puts_info "Enter the directories and/or files to include in the SquashFS file, separated by spaces (excluding /etc paths):"
-			puts_info "Here are some suggestions/examples: /Applications /boot /usr /installed_pkgs_end.txt"
-			read -r -a ITEMS
-			check_etc_paths "${ITEMS[@]}"
+					DEST_FILE="ota-$(date +%Y.%m.%d-%H.%M)-amd64.squashfs"
 
+					if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr -e /boot/efi -e /boot/grub; then
+						puts_success "SquashFS file created successfully."
+					else
+						puts_error "Failed to create SquashFS file."
+						exit 1
+					fi
+					
+					puts_info "Contents of the SquashFS file:"
+					unsqs -l "$DEST_FILE" | tee "$DEST_FILE.contents"
 
-			# -- Check if user input is empty.
+					puts_info "MD5 sum of the SquashFS file:"
+					md5sum "$DEST_FILE"
 
-			if [[ ${#ITEMS[@]} -eq 0 ]]; then
-				puts_error "No directories or files specified. Exiting."
-				exit 1
-			fi
+					puts_info "Size of the SquashFS file:"
+					du -sh "$DEST_FILE"
 
+					break
+					;;
 
-			# -- Define the destination SquashFS file name using the specified format.
+				*)
+					puts_error "Unknown option: $1"
+					exit 1
+					;;
+			esac
+		shift
+	done
 
-			DEST_FILE="ota-$(date +%Y.%m.%d-%H.%M)-amd64.squashfs"
-
-
-			# -- Create the SquashFS file with zstd compression.
-
-			if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr -e /boot/efi -e /boot/grub; then
-				puts_success "SquashFS file created successfully."
-			else
-				puts_error "Failed to create SquashFS file."
-				exit 1
-			fi
-
-
-			# -- Display the contents of the SquashFS file.
-
-			puts_info "Contents of the SquashFS file:"
-			unsqs -l "$DEST_FILE" | tee "$DEST_FILE.contents"
-
-
-			# -- Display the MD5 sum of the SquashFS file.
-
-			puts_info "MD5 sum of the SquashFS file:"
-			md5sum "$DEST_FILE"
-
-
-			# -- Display the size of the SquashFS file.
-
-			puts_info "Size of the SquashFS file:"
-			du -sh "$DEST_FILE"
-
-			shift;;
-	esac
-done ) 2>&1 | tee -a "/var/log/mkota.log"
+) 2>&1 | if [ -w "$LOG_FILE" ]; then tee -a "$LOG_FILE"; else cat; fi
 
 
 #   ====== END ======

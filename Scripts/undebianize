@@ -52,8 +52,9 @@ rm -rf ${REMOVE_DPKG//\\n/ } || true
 
 #   Delete translation files.
 
-find /usr/share/locale/ -name 'dpkg.mo' -exec rm -f {} \;
-find /usr/share/locale/ -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'apt.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'dpkg.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
 
 
 #   Delete live user from root because idontfuckingknowwhy the postrm script in the package
