@@ -28,101 +28,161 @@
 set -euo pipefail
 
 
+# -- Set program name and version.
+
+TOOL_NAME="DiffDir"
+TOOL_SHRT_NAME="diffdir"
+TOOL_VERSION="0.0.1_$(date +%Y%m%d)"
+VENDOR='Nitrux Latinoamericana S.C.'
+FECHA=$(date +%Y)
+
+
 # -- Function to display help and usage information.
 
 display_help() {
-    echo "Usage: $0 [option] [arguments]"
+    echo "$TOOL_NAME "
+    echo "Description:"
+    echo ""
+    echo "    $TOOL_NAME is a utility to create a file list from a directory and then compare these lists."
+    echo ""
+    echo "    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues."
+    echo ""
+    echo "Usage: $TOOL_SHRT_NAME [option] [arguments]"
     echo ""
     echo "Options:"
-    echo "  -g, --generate [directory]   Generate a file list from the specified directory."
-    echo "  -c, --compare [file1] [file2] Compare two existing file lists and list differences."
-    echo "  -h, --help                   Display this help message."
+    echo "  -g, --generate [directory]      Generate a file list from the specified directory."
+    echo "  -c, --compare [file1] [file2]   Compare two existing file lists and list differences."
+    echo "  -h, --help                      Display this help message."
     echo ""
     echo "Examples:"
-    echo "  $0 -g /Applications  # Generate file list for /Applications"
-    echo "  $0 -c list1.txt list2.txt  # Compare file lists list1.txt and list2.txt"
+    echo "  $TOOL_SHRT_NAME -g /Applications          # Generate file list for /Applications"
+    echo "  $TOOL_SHRT_NAME -c LIST1.txt LIST2.txt    # Compare file lists LIST1.txt and LIST2.txt"
+}
+
+display_version() {
+    echo "Version: $TOOL_VERSION."
+    echo ""
+    echo "The license used for this program is: BSD-3-Clause."
+    echo ""
+    echo "Authors:"
+    echo ""
+    echo "    Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>"
+    echo ""
+    echo "(c) $FECHA Some Rights Reserved. Made by $VENDOR"
 }
 
 
 # -- Function to generate a file list with path, checksum, timestamp, and size.
 
 generate_file_list() {
-    local dir=$1
-    local file_list_path
+    local DIR_PATH="$1"
+    local DIR_NAME
+    local FILE_LIST_PATH
+    local SYMLINK_LIST_PATH
+    local TEMP_FIND_OUTPUT
+    local TOTAL
+    local COUNT=0
 
-    # Check if the file already exists
-    base_name="file_list_$(basename "$dir").txt"
-    file_list_path="$(pwd)/$base_name"
+    DIR_NAME=$(basename "$DIR_PATH")
+    FILE_LIST_PATH="${DIR_PATH%/}/${DIR_NAME}_file_list.txt"
+    SYMLINK_LIST_PATH="${DIR_PATH%/}/${DIR_NAME}_symlink_list.txt"
 
-    i=2
-    while [ -e "$file_list_path" ]; do
-        file_list_path="$(pwd)/file_list_$(basename "$dir")_${i}.txt"
-        ((i++))
-    done
+    TEMP_FIND_OUTPUT=$(mktemp -p /tmp)
 
-    cd "$dir" || exit 1
+    : > "$FILE_LIST_PATH"
+    : > "$SYMLINK_LIST_PATH"
 
-    find . -type f -exec sh -c 'for file; do printf "%s  %s\n" "$(md5sum "$file" | cut -d " " -f 1)" "'"$dir"'/${file#./}"; done' sh {} + > "$file_list_path"
+    TOTAL=$(find "$DIR_PATH" \( -type f -o -type l \) -not -path "$FILE_LIST_PATH" -not -path "$SYMLINK_LIST_PATH" | wc -l)
 
-    echo "Generated file list at $file_list_path"
+    find "$DIR_PATH" \( -type f -o -type l \) -not -path "$FILE_LIST_PATH" -not -path "$SYMLINK_LIST_PATH" | while IFS= read -r FILE; do
+        COUNT=$((COUNT + 1))
+        echo "Processing file $COUNT of $TOTAL"
+
+        if [ -L "$FILE" ]; then
+            local TARGET
+            if ! TARGET=$(readlink "$FILE"); then
+                echo "Error: readlink command failed for $FILE"
+                continue
+            fi
+            echo "$FILE -> $TARGET" >> "$SYMLINK_LIST_PATH"
+        else
+            local CHECKSUM
+            if ! CHECKSUM=$(sha256sum "$FILE" | awk '{ print $1 }'); then
+                echo "Error: sha256sum failed for $FILE"
+                continue
+            fi
+            echo "$CHECKSUM $FILE" >> "$FILE_LIST_PATH"
+        fi
+    done < "$TEMP_FIND_OUTPUT"
+
+    rm "$TEMP_FIND_OUTPUT"
+    mv "$FILE_LIST_PATH" "$PWD"
+    mv "$SYMLINK_LIST_PATH" "$PWD"
 }
 
 
 # -- Function to normalize paths.
 
 normalize_paths() {
-    local original_list=$1
-    local normalized_list=$2
-    sed 's/\.wiki\.2\//\.wiki\//' "$original_list" | sort > "$normalized_list"
+    local ORIGINAL_LIST=$1
+    local NORMALIZED_LIST=$2
+    sort "$ORIGINAL_LIST" > "$NORMALIZED_LIST"
 }
 
 
 # -- Function to compare file lists and generate a list of differences.
 
 compare_file_lists() {
-    local list1=$1
-    local list2=$2
-    local diff_list_path
-    local temp_diff_checksums
-    local temp_diff_unique
-    local norm_list1
-    local norm_list2
+    local LIST1=$1
+    local LIST2=$2
+    local TOTAL_LINES
+    local CURRENT_LINE
+    local DIFF_LIST_PATH
+    local TEMP_DIFF_CHECKSUMS
+    local TEMP_DIFF_UNIQUE
+    local NORM_LIST1
+    local NORM_LIST2
 
-    diff_list_path="$(pwd)/dir_diff_list.txt"
-    temp_diff_checksums=$(mktemp)
-    temp_diff_unique=$(mktemp)
-    norm_list1=$(mktemp)
-    norm_list2=$(mktemp)
+    DIFF_LIST_PATH="$(pwd)/dir_diff_list.txt"
+    TEMP_DIFF_CHECKSUMS=$(mktemp)
+    TEMP_DIFF_UNIQUE=$(mktemp)
+    NORM_LIST1=$(mktemp)
+    NORM_LIST2=$(mktemp)
 
-    normalize_paths "$list1" "$norm_list1"
-    normalize_paths "$list2" "$norm_list2"
+    normalize_paths "$LIST1" "$NORM_LIST1"
+    normalize_paths "$LIST2" "$NORM_LIST2"
 
-    while IFS= read -r line; do
-        checksum=$(echo "$line" | cut -d ' ' -f 1)
-        filepath=$(echo "$line" | cut -d ' ' -f 2-)
-        if grep -q "$filepath" "$norm_list2"; then
-            if ! grep -q "$checksum $filepath" "$norm_list2"; then
-                echo "$line" >> "$temp_diff_checksums"
+    TOTAL_LINES=$(wc -l < "$NORM_LIST1")
+    CURRENT_LINE=0
+
+    while IFS= read -r LINE_FROM_LIST1; do
+        CURRENT_LINE=$((CURRENT_LINE + 1))
+        CHECKSUM=$(echo "$LINE_FROM_LIST1" | cut -d ' ' -f 1)
+        FILEPATH=$(echo "$LINE_FROM_LIST1" | cut -d ' ' -f 2-)
+
+        echo "Comparing: Line $CURRENT_LINE of $TOTAL_LINES"
+
+        if grep -Fq "$FILEPATH" "$NORM_LIST2"; then
+            if ! grep -Fq "$CHECKSUM $FILEPATH" "$NORM_LIST2"; then
+                echo "$LINE_FROM_LIST1" >> "$TEMP_DIFF_CHECKSUMS"
             fi
         else
-            echo "$line" >> "$temp_diff_unique"
+            echo "$LINE_FROM_LIST1" >> "$TEMP_DIFF_UNIQUE"
         fi
-    done < "$norm_list1"
-
-    rm "$diff_list_path"
+    done < "$NORM_LIST1"
 
     {
-        echo "##### File(s) with different checksum that exist in both lists"
-        cat "$temp_diff_checksums"
+        echo "##### File(s) with different CHECKSUM that exist in both lists"
+        cat "$TEMP_DIFF_CHECKSUMS"
         echo ""
-        echo "##### File(s) found in list #1 but not in list #2"
-        cat "$temp_diff_unique"
-    } >> "$diff_list_path"
+        echo "##### File(s) found in $LIST1 but not in $LIST2"
+        cat "$TEMP_DIFF_UNIQUE"
+    } >> "$DIFF_LIST_PATH"
 
-    rm "$temp_diff_checksums" "$temp_diff_unique" "$norm_list1" "$norm_list2"
+    rm "$TEMP_DIFF_CHECKSUMS" "$TEMP_DIFF_UNIQUE" "$NORM_LIST1" "$NORM_LIST2"
 
-    if [ -s "$diff_list_path" ]; then
-        echo "Differences have been found and listed in $diff_list_path"
+    if [ -s "$DIFF_LIST_PATH" ]; then
+        echo "Differences have been found and listed in $DIFF_LIST_PATH"
     else
         echo "No differences found."
     fi
@@ -162,6 +222,11 @@ while (( "$#" )); do
 
         -h|--help)
             display_help
+            exit 0
+            ;;
+
+        -v|--version)
+            display_version
             exit 0
             ;;
 

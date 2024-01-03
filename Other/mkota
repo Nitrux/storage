@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #############################################################################################################################################################################
 #   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
@@ -179,7 +179,7 @@ fi
 					"" \
 					"    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues." \
 					"" \
-					"Flags:" \
+					"Options:" \
 					"    -h or --help                 Show this help." \
 					"    -v or --version              Show the version." \
 					"    -d or --debug                Enable verbose output." \
@@ -188,11 +188,11 @@ fi
 					"    create            Initializes the process to create an OTA-style SquashFS file." \
 					"" \
 					"Usage:" \
-					"    sudo mkota <flag> (operation)" \
+					"    sudo $TOOL_SHRT_NAME <flag> (operation)" \
 					"" \
 					"Examples:" \
-					"    sudo mkota create" \
-					"    sudo mkota -d create"
+					"    sudo $TOOL_SHRT_NAME create" \
+					"    sudo $TOOL_SHRT_NAME -d create"
 					exit
 					;;
 
@@ -246,8 +246,8 @@ fi
 					puts_info "Contents of the SquashFS file:"
 					unsqs -l "$DEST_FILE" | tee "$DEST_FILE.contents"
 
-					puts_info "MD5 sum of the SquashFS file:"
-					md5sum "$DEST_FILE"
+					puts_info "SHA256 sum of the SquashFS file:"
+					sha256sum "$DEST_FILE"
 
 					puts_info "Size of the SquashFS file:"
 					du -sh "$DEST_FILE"
