@@ -30,29 +30,23 @@ set -xe
 
 # -- Functions.
 
-dpkg_force_remove () {
-    /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"
-}
+dpkg_force_remove () { /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"; }
 
 
 # -- Remove package manager.
 
-REMOVE_DEB_BITS_PKGS=(
-    apt
-    apt-transport-https
-    apt-utils
-)
+REMOVE_DEB_BITS_PKGS='
+	apt
+	apt-transport-https
+	apt-utils
+'
 
-for pkg in "${REMOVE_DEB_BITS_PKGS[@]}"; do
-    if dpkg -l | grep -qw "$pkg"; then
-        dpkg_force_remove "$pkg"
-    fi
-done
+dpkg_force_remove $REMOVE_DEB_BITS_PKGS
 
 
 # -- Remove dpkg and APT files, libraries, and binaries that still exist.
 
-REMOVE_DPKG=(
+REMOVE_DPKG='
     /etc/alternatives/README
     /etc/apt
     /etc/cron.daily/dpkg
@@ -79,18 +73,16 @@ REMOVE_DPKG=(
     /var/lib/dpkg/
     /var/log/apt/
     /var/log/dpkg.log
-)
+'
 
-for path in "${REMOVE_DPKG[@]}"; do
-    if [[ -e $path ]]; then
-        rm -rf "$path"
-    fi
-done
+rm -rf ${REMOVE_DPKG//\\n/ } || true
 
 
 # -- Delete package manager translation files.
 
-find /usr/share/locale/ -type f \( -name 'apt.mo' -o -name 'dpkg.mo' -o -name 'libapt-pkg6.0.mo' \) -exec rm -f {} +
+find /usr/share/locale/ -type f -name 'apt.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'dpkg.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
 
 
 # -- Delete live user from root because idontfuckingknowwhy the postrm script in the package doesn't actually do that, so let's brute force that.
