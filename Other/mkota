@@ -236,7 +236,7 @@ fi
 
 					DEST_FILE="ota-$(date +%Y.%m.%d-%H.%M)-amd64.squashfs"
 
-					if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -keep-as-directory -e /usr/bin/nuts -e /usr/bin/nuts-cru -e /usr/bin/nuts-crr -e /boot/efi -e /boot/grub; then
+					if mksqs "${ITEMS[@]}" "$DEST_FILE" -comp zstd -Xcompression-level 22 -b 1048576 -quiet -not-reproducible -no-strip -keep-as-directory; then
 						puts_success "SquashFS file created successfully."
 					else
 						puts_error "Failed to create SquashFS file."
@@ -246,8 +246,8 @@ fi
 					puts_info "Contents of the SquashFS file:"
 					unsqs -l "$DEST_FILE" | tee "$DEST_FILE.contents"
 
-					puts_info "SHA256 sum of the SquashFS file:"
-					sha256sum "$DEST_FILE"
+					puts_info "MD5 sum of the SquashFS file:"
+					md5sum "$DEST_FILE" | tee "$DEST_FILE.md5sum"
 
 					puts_info "Size of the SquashFS file:"
 					du -sh "$DEST_FILE"

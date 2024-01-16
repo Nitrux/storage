@@ -1,24 +1,58 @@
-#! /bin/bash
+#!/usr/bin/env bash
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2023> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+
+# -- Exit on errors.
 
 set -xe
 
-dpkg_force_remove () { /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"; }
+
+# -- Functions.
+
+dpkg_force_remove () {
+    /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"
+}
 
 
-#	Remove Debian bits.
+# -- Remove package manager.
 
-REMOVE_DEB_BITS_PKGS='
-	apt
-	apt-transport-https
-	apt-utils
-'
+REMOVE_DEB_BITS_PKGS=(
+    apt
+    apt-transport-https
+    apt-utils
+)
 
-dpkg_force_remove $REMOVE_DEB_BITS_PKGS
+for pkg in "${REMOVE_DEB_BITS_PKGS[@]}"; do
+    if dpkg -l | grep -qw "$pkg"; then
+        dpkg_force_remove "$pkg"
+    fi
+done
 
 
-#   Remove dpkg stuff.
+# -- Remove dpkg and APT files, libraries, and binaries that still exist.
 
-REMOVE_DPKG='
+REMOVE_DPKG=(
     /etc/alternatives/README
     /etc/apt
     /etc/cron.daily/dpkg
@@ -45,26 +79,27 @@ REMOVE_DPKG='
     /var/lib/dpkg/
     /var/log/apt/
     /var/log/dpkg.log
-'
+)
 
-rm -rf ${REMOVE_DPKG//\\n/ } || true
-
-
-#   Delete translation files.
-
-find /usr/share/locale/ -type f -name 'apt.mo' -exec rm -f {} \;
-find /usr/share/locale/ -type f -name 'dpkg.mo' -exec rm -f {} \;
-find /usr/share/locale/ -type f -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
+for path in "${REMOVE_DPKG[@]}"; do
+    if [[ -e $path ]]; then
+        rm -rf "$path"
+    fi
+done
 
 
-#   Delete live user from root because idontfuckingknowwhy the postrm script in the package
-#   doesn't actually do that, so let's brute force that.
+# -- Delete package manager translation files.
+
+find /usr/share/locale/ -type f \( -name 'apt.mo' -o -name 'dpkg.mo' -o -name 'libapt-pkg6.0.mo' \) -exec rm -f {} +
+
+
+# -- Delete live user from root because idontfuckingknowwhy the postrm script in the package doesn't actually do that, so let's brute force that.
 
 deluser --remove-home nitrux
 
 
-#   Run update-grub because, for some "reason," the parameter "ro" is added to the GRUB menu entries.
-#   This parameter completely fucks up the overlay and renders the system unusable.
-#   We've replaced update-grub in the ISO with a custom version that removes the parameter after generating the menu file.
+# -- Run update-grub because, for some "reason," the parameter "ro" is added to the GRUB menu entries.
+# -- This parameter completely fucks up the overlay and renders the system unusable.
+# -- We've replaced update-grub in the ISO with a custom version that removes the parameter after generating the menu file.
 
 update-grub
