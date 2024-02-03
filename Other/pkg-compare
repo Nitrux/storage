@@ -49,19 +49,19 @@ def compare_package_lists(list_a, list_b):
         else:
             only_in_b[package] = version
             
-    return newer_versions.keys(), only_in_b.keys()  # Return only package names
+    return newer_versions.keys(), only_in_b.keys()
 
 def save_packages_to_file(packages, file_name):
     """Save packages to a file."""
     with open(file_name, 'w') as file:
-        for package in packages:  # Write only package names
+        for package in packages:
             file.write(f"{package}\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare two dpkg package lists.")
-    parser.add_argument("--compare", nargs=2, metavar=('list1.txt', 'list2.txt'), help="Paths to the package lists to compare.")
-    parser.add_argument("--out-updated", metavar="update.txt", help="File name for saving packages with newer versions.")
-    parser.add_argument("--out-new", metavar="new.txt", help="File name for saving packages only in the second list.")
+    parser = argparse.ArgumentParser(description="Compare two dpkg package lists.", formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("-c", "--compare", nargs=2, metavar=('list1.txt', 'list2.txt'), help="Paths to the package lists to compare.")
+    parser.add_argument("-u", "--out-updated", metavar="update.txt", help="File name for saving packages with newer versions.")
+    parser.add_argument("-n", "--out-new", metavar="new.txt", help="File name for saving packages only in the second list.")
 
     args = parser.parse_args()
 
@@ -74,8 +74,8 @@ def main():
         save_packages_to_file(newer_versions, args.out_updated)
         save_packages_to_file(only_in_b, args.out_new)
         
-        print(f"Newer package names are saved to {args.out_updated}")
-        print(f"Package names only in the second list are saved to {args.out_new}")
+        print(f"Update packages are saved to {args.out_updated}")
+        print(f"Newly added pacakges are saved to {args.out_new}")
     else:
         parser.print_help()
 
