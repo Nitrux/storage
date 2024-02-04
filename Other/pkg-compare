@@ -51,6 +51,10 @@ def compare_package_lists(list_a, list_b):
             
     return newer_versions.keys(), only_in_b.keys()
 
+def filter_packages(packages, exclude_list):
+    """Exclude specific packages from the list."""
+    return [package for package in packages if package not in exclude_list]
+
 def save_packages_to_file(packages, file_name):
     """Save packages to a file."""
     with open(file_name, 'w') as file:
@@ -65,17 +69,26 @@ def main():
 
     args = parser.parse_args()
 
+    # List of packages to exclude from the updated package list
+    exclude_list = [
+        'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64',
+        'linux-image-liquorix-amd64', 'libstdc++-13-dev', 'libstdc++6'
+    ]
+
     if args.compare and args.out_updated and args.out_new:
         list_a = load_package_list(args.compare[0])
         list_b = load_package_list(args.compare[1])
         
         newer_versions, only_in_b = compare_package_lists(list_a, list_b)
         
-        save_packages_to_file(newer_versions, args.out_updated)
+        # Filter the lists to exclude specific packages
+        filtered_newer_versions = filter_packages(newer_versions, exclude_list)
+        
+        save_packages_to_file(filtered_newer_versions, args.out_updated)
         save_packages_to_file(only_in_b, args.out_new)
         
-        print(f"Update packages are saved to {args.out_updated}")
-        print(f"Newly added pacakges are saved to {args.out_new}")
+        print(f"Updated packages are saved to {args.out_updated}")
+        print(f"Newly added packages are saved to {args.out_new}")
     else:
         parser.print_help()
 
