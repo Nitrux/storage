@@ -27,7 +27,7 @@
 set -eu
 
 
-# -- Workaround for NVIDIA GPUs using PRIME configuration, this will make output available on external ports.
+# -- Workaround for some laptops with NVIDIA GPUs that use PRIME; this will output the image to external ports.
 
 test -f /usr/share/X11/xorg.conf.d/10-nvidia.conf && {
     echo 'NVIDIA Proprietary Driver installed!, adding X11 configuration.'
