@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 
 #############################################################################################################################################################################
 #   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
@@ -22,42 +22,87 @@
 #    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
 #############################################################################################################################################################################
 
+import subprocess
+import shutil
+import sys
+import os
+import tempfile
+import requests
+import argparse
 
-# -- Exit on errors.
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:
+    print("Error: The 'tqdm' library is required. Do you want to install it? (y/n)")
+    choice = input()
+    if choice.lower() == 'y':
+        subprocess.run(['pip', 'install', 'tqdm'])
+    else:
+        sys.exit(1)
 
-set -e
+def check_apt_availability():
+    if shutil.which('apt') is None:
+        print("Error: 'apt' command not found. Please ensure that 'apt' is installed and available in your PATH.")
+        sys.exit(1)
 
+def run_apt_update():
+    try:
+        subprocess.run(['apt', 'update'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        sys.exit("Error: Failed to run 'apt update'.")
 
-# -- Download packages to a directory.
+def extract_packages(file_path):
+    packages = []
+    if not os.path.exists(file_path):
+        sys.exit(f"Error: File '{file_path}' not found.")
+    with open(file_path, 'r') as file:
+        for line in file:
+            if line.startswith('ii'):
+                parts = line.split()
+                if len(parts) > 1:
+                    packages.append(parts[1])
+    return packages
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <package-name> <download-directory>"
-    exit 1
-fi
+def download_file(url, output_file):
+    try:
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            total_size = int(r.headers.get('content-length', 0))
+            with open(output_file, 'wb') as f:
+                with tqdm(total=total_size, unit='B', unit_scale=True, desc=os.path.basename(output_file)) as progress_bar:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            progress_bar.update(len(chunk))
+    except requests.exceptions.RequestException as e:
+        sys.exit(f"Error downloading file from {url}: {e}")
 
+def download_packages(packages, download_dir, verbose=False):
+    temp_dir = tempfile.mkdtemp()
+    try:
+        for package in packages:
+            apt_command = ['apt', 'download', '-o', f'Dir::Cache::archives={temp_dir}', '--print-uris', package]
+            apt_process = subprocess.run(apt_command, check=True, capture_output=True, text=True)
+            download_url = apt_process.stdout.strip().split()[1][1:-1]  # Extract URL from output
+            package_filename = os.path.basename(download_url)
+            download_path = os.path.join(download_dir, package_filename)
+            if verbose:
+                print(f"Downloading {package} from {download_url} to {download_path}")
+            download_file(download_url, download_path)
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+        except OSError as e:
+            sys.exit(f"Error removing temporary directory {temp_dir}: {e}")
 
-PACKAGE_NAME="$1"
-DOWNLOAD_DIR="$2"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Download packages listed in a file using apt.')
+    parser.add_argument('-f', '--package-list', metavar='package_list', type=str, required=True, help='File containing a list of package names (output of dpkg-query -l)')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Run in verbose mode')
+    parser.add_argument('-d', '--download-dir', type=str, default='/var/cache/apt/archives', help='Directory to save downloaded packages')
+    args = parser.parse_args()
 
-
-mkdir -p "$DOWNLOAD_DIR" || exit 1
-cd "$DOWNLOAD_DIR" || exit 1
-
-
-apt --print-uris --yes install "$PACKAGE_NAME" | grep "^'" | cut -d"'" -f2 > download_links.txt
-
-
-apt-rdepends "$PACKAGE_NAME" | \
-    grep -v "^ " | \
-    sed '/^$/d' | \
-    xargs apt --print-uris --yes install | \
-    grep "^'" | \
-    cut -d"'" -f2 >> download_links.txt
-
-
-while read -r link; do
-    wget "$link"
-done < download_links.txt
-
-
-rm -f download_links.txt
+    check_apt_availability()
+    run_apt_update()
+    packages = extract_packages(args.package_list)
+    download_packages(packages, args.download_dir, args.verbose)
