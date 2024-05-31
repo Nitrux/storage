@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2024> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+import os
+import shutil
+import subprocess
+from tqdm import tqdm
+import time
+import argparse
+import sys
+
+def is_bootable_iso(iso_file):
+    return True
+
+def copy_iso_to_directory(iso_file, target_dir):
+    dst_path = os.path.join(target_dir, os.path.basename(iso_file))
+    shutil.copyfile(iso_file, dst_path)
+    subprocess.run(['sync'])
+    with tqdm(total=os.path.getsize(iso_file), unit='B', unit_scale=True, desc='Copying ISO file') as progress:
+        def update_progress(chunk):
+            progress.update(chunk)
+        with open(iso_file, 'rb') as src_file:
+            while True:
+                chunk = src_file.read(1024 * 1024)
+                if not chunk:
+                    break
+                with open(dst_path, 'ab') as dst_file:
+                    dst_file.write(chunk)
+                    update_progress(len(chunk))
+    start_time = time.time()
+    subprocess.run(['sync'])
+    end_time = time.time()
+    print(f"Sync command completed in {end_time - start_time:.2f} seconds")
+
+def main():
+    parser = argparse.ArgumentParser(description='Copy a bootable ISO file to a directory.')
+    parser.add_argument('-f', '--file', help='Path to the bootable ISO file', required=True)
+    parser.add_argument('-d', '--directory', help='Target directory', required=True)
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.file):
+        print("Error: Specified file does not exist.")
+        return
+    if not is_bootable_iso(args.file):
+        print("Error: Specified file is not recognized as a bootable ISO.")
+        return
+    if not os.path.isdir(args.directory):
+        print("Error: Specified directory does not exist.")
+        return
+
+    copy_iso_to_directory(args.file, args.directory)
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        sys.argv.append('-h')
+    main()
