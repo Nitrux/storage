@@ -64,7 +64,7 @@ def save_packages_to_file(packages, file_name):
 
 def main():
     parser = argparse.ArgumentParser(description="Compare two dpkg package lists.", formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("-c", "--compare", nargs=2, metavar=('list1.txt', 'list2.txt'), help="Paths to the package lists to compare.")
+    parser.add_argument("-c", "--compare", nargs=2, metavar=('list1.txt', 'list2.txt'), help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt.")
     parser.add_argument("-u", "--out-updated", metavar="update_list.txt", help="File name for saving packages with newer versions.")
     parser.add_argument("-n", "--out-new", metavar="new_list.txt", help="File name for saving packages only in the second list.")
 
@@ -86,8 +86,7 @@ def main():
         list_b = load_package_list(args.compare[1])
         
         newer_versions, only_in_b = compare_package_lists(list_a, list_b)
-        
-        # Remove excluded packages after the list is created
+
         filtered_newer_versions = remove_excluded_packages(newer_versions, exclude_list, exclude_patterns)
         filtered_only_in_b = remove_excluded_packages(only_in_b, exclude_list, exclude_patterns)
         
