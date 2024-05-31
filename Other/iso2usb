@@ -85,11 +85,7 @@ def copy_iso_to_directory(iso_file, target_dir):
                     dst_file.flush()  # Flush the write buffer
                     os.fsync(dst_file.fileno())  # Empty kernel write cache for this file
                     progress.update(len(block))
-
-    start_time = time.time()
-    os.fsync(dst_file.fileno())  # Empty kernel write cache for the whole file
-    end_time = time.time()
-    print(f"Sync command completed in {end_time - start_time:.2f} seconds")
+                    os.fsync(dst_file.fileno())  # Empty kernel write cache for the whole file
 
     target_checksum = get_file_checksum(dst_path)
     print(f"Target file checksum (SHA-256): {target_checksum}")
