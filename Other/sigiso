@@ -75,6 +75,10 @@ def main():
     parser.add_argument('key_id', nargs='?', help='ID of the GPG key to use for signing')
     args = parser.parse_args()
 
+    if not args.iso_file and not args.key_id:
+        parser.print_help()
+        return
+
     if not args.iso_file:
         args.iso_file = select_iso_file()
         if not args.iso_file:
