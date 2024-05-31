@@ -29,29 +29,58 @@ from tqdm import tqdm
 import time
 import argparse
 import sys
+import hashlib
 
 def is_bootable_iso(iso_file):
     return True
 
+def get_file_checksum(file_path):
+    with open(file_path, 'rb') as f:
+        checksum = hashlib.sha256()
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            checksum.update(chunk)
+    return checksum.hexdigest()
+
 def copy_iso_to_directory(iso_file, target_dir):
+    file_size = os.path.getsize(iso_file)
+    source_checksum = get_file_checksum(iso_file)
+
+    print(f"Source file: {iso_file}")
+    print(f"Target directory: {target_dir}")
+    print(f"File size: {file_size} bytes")
+    print(f"Source file checksum (SHA-256): {source_checksum}")
+
     dst_path = os.path.join(target_dir, os.path.basename(iso_file))
-    shutil.copyfile(iso_file, dst_path)
-    subprocess.run(['sync'])
-    with tqdm(total=os.path.getsize(iso_file), unit='B', unit_scale=True, desc='Copying ISO file') as progress:
-        def update_progress(chunk):
-            progress.update(chunk)
-        with open(iso_file, 'rb') as src_file:
-            while True:
-                chunk = src_file.read(1024 * 1024)
-                if not chunk:
-                    break
-                with open(dst_path, 'ab') as dst_file:
-                    dst_file.write(chunk)
-                    update_progress(len(chunk))
+
+    block_size = 4 * 1024 * 1024  # 4MB block size
+    total_blocks = (file_size + block_size - 1) // block_size
+
+    with open(iso_file, 'rb') as src_file:
+        with open(dst_path, 'wb') as dst_file:
+            with tqdm(total=file_size, unit='B', unit_scale=True, desc='Copying ISO file') as progress:
+                for _ in range(total_blocks):
+                    block = src_file.read(block_size)
+                    if not block:
+                        break
+                    dst_file.write(block)
+                    os.fsync(dst_file.fileno())  # Empty kernel write cache for this file
+                    progress.update(len(block))
+
     start_time = time.time()
-    subprocess.run(['sync'])
+    os.fsync(dst_file.fileno())  # Empty kernel write cache for the whole file
     end_time = time.time()
     print(f"Sync command completed in {end_time - start_time:.2f} seconds")
+
+    target_checksum = get_file_checksum(dst_path)
+    print(f"Target file checksum (SHA-256): {target_checksum}")
+
+    if source_checksum == target_checksum:
+        print("Checksums match. File copied successfully.")
+    else:
+        print("Checksums do not match. File may not have been copied successfully.")
 
 def main():
     parser = argparse.ArgumentParser(description='Copy a bootable ISO file to a directory.')
