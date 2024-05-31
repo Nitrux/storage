@@ -22,37 +22,75 @@
 #    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
 #############################################################################################################################################################################
 
-import gnupg
-import readline
 import os
+import argparse
+import gnupg
 
-def list_keys(gpg):
+def select_iso_file():
+    iso_files = [f for f in os.listdir('.') if f.endswith('.iso')]
+    if not iso_files:
+        print("No ISO files found in the current directory.")
+        return None
+    print("Select an ISO file to sign:")
+    for i, iso_file in enumerate(iso_files):
+        print(f"{i+1}. {iso_file}")
+    choice = input("Enter the number of the ISO file to sign: ")
+    try:
+        choice_index = int(choice) - 1
+        if choice_index < 0 or choice_index >= len(iso_files):
+            raise ValueError
+        return iso_files[choice_index]
+    except (ValueError, IndexError):
+        print("Invalid choice.")
+        return None
+
+def select_key(gpg):
     keys = gpg.list_keys()
-    for key in keys:
-        print("Key ID:", key['keyid'])
-        print("Fingerprint:", key['fingerprint'])
-        print("User ID:", key['uids'][0])
-        print()
+    if not keys:
+        print("No keys found.")
+        return None
+    print("Select a key to sign with:")
+    for i, key in enumerate(keys):
+        print(f"{i+1}. {key['uids'][0]}")
+    choice = input("Enter the number of the key to use: ")
+    try:
+        choice_index = int(choice) - 1
+        if choice_index < 0 or choice_index >= len(keys):
+            raise ValueError
+        return keys[choice_index]['keyid']
+    except (ValueError, IndexError):
+        print("Invalid choice.")
+        return None
 
-def sign_iso(gpg, key_id, iso_file):
-    if not os.path.isfile(iso_file):
-        print("Error: The specified ISO file does not exist.")
-        return
-    signed_iso = gpg.sign_file(open(iso_file, 'rb'), keyid=key_id, detach=True, output=iso_file + '.asc')
-    print("ISO file signed successfully. Signature saved as:", iso_file + '.asc')
+def sign_iso(gpg, iso_file, key_id):
+    with open(iso_file, 'rb') as f:
+        signed_data = gpg.sign_file(f, key_id, detach=True, clearsign=False)
+    with open(f'{iso_file}.asc', 'wb') as f:
+        f.write(signed_data.data)
+    print("ISO file signed successfully.")
 
 def main():
+    parser = argparse.ArgumentParser(description='Sign an ISO file with a selected GPG key.')
+    parser.add_argument('-f', '--iso-file', help='Path to the ISO file to sign')
+    parser.add_argument('key_id', nargs='?', help='ID of the GPG key to use for signing')
+    args = parser.parse_args()
+
+    if not args.iso_file:
+        args.iso_file = select_iso_file()
+        if not args.iso_file:
+            return
+
     gpg = gnupg.GPG()
+    if not os.path.exists(args.iso_file):
+        print("ISO file not found.")
+        return
 
-    print("List of keys:")
-    list_keys(gpg)
-    selected_key_id = input("Enter the key ID of the key you want to use for signing: ")
+    if not args.key_id:
+        args.key_id = select_key(gpg)
+        if not args.key_id:
+            return
 
-    iso_file = input("Enter the path to the ISO file you want to sign: ")
-
-    sign_iso(gpg, selected_key_id, iso_file.strip())
+    sign_iso(gpg, args.iso_file, args.key_id)
 
 if __name__ == "__main__":
-    readline.parse_and_bind('tab: complete')
-    readline.parse_and_bind('set editing-mode vi')
     main()
