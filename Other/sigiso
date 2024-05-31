@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2024> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+import gnupg
+import readline
+import os
+
+def list_keys(gpg):
+    keys = gpg.list_keys()
+    for key in keys:
+        print("Key ID:", key['keyid'])
+        print("Fingerprint:", key['fingerprint'])
+        print("User ID:", key['uids'][0])
+        print()
+
+def sign_iso(gpg, key_id, iso_file):
+    if not os.path.isfile(iso_file):
+        print("Error: The specified ISO file does not exist.")
+        return
+    signed_iso = gpg.sign_file(open(iso_file, 'rb'), keyid=key_id, detach=True, output=iso_file + '.asc')
+    print("ISO file signed successfully. Signature saved as:", iso_file + '.asc')
+
+def main():
+    gpg = gnupg.GPG()
+
+    print("List of keys:")
+    list_keys(gpg)
+    selected_key_id = input("Enter the key ID of the key you want to use for signing: ")
+
+    iso_file = input("Enter the path to the ISO file you want to sign: ")
+
+    sign_iso(gpg, selected_key_id, iso_file.strip())
+
+if __name__ == "__main__":
+    readline.parse_and_bind('tab: complete')
+    readline.parse_and_bind('set editing-mode vi')
+    main()
