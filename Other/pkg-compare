@@ -72,7 +72,8 @@ def main():
 
     exclude_list = [
         'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64',
-        'linux-image-liquorix-amd64', 'libstdc++-13-dev', 'libstdc++6'
+        'apt-transport-https', 'linux-image-liquorix-amd64', 'libstdc++-13-dev',
+        'libstdc++6'
     ]
 
     exclude_patterns = [
