@@ -27,6 +27,8 @@ rm -f "${DESTINATION}/latest.txt"
 NVIDIA_DRV_DEPS_PKGS='
 	acpid
 	build-essential
+	dkms
+	initramfs-tools
 	libglvnd-core-dev
 	libglvnd-dev
 	pkg-config
