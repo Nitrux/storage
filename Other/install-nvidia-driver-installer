@@ -4,8 +4,6 @@ set -eu
 
 
 # -- Install the *LATEST* NVIDIA proprietary driver using the official installer.
-# -- Trying to add the PPA now causes the package manager to do nothing when building the ISO, so thank you, APT! /s.
-
 # -- Download the driver directly from NVIDIA.
 
 BASE_URL="http://download.nvidia.com/XFree86/Linux-x86_64/"
@@ -34,7 +32,7 @@ NVIDIA_DRV_DEPS_PKGS='
 	pkg-config
 '
 
-apt install $NVIDIA_DRV_DEPS_PKGS
+apt install -y --no-install-recommends $NVIDIA_DRV_DEPS_PKGS
 
 
 # -- Execute the installer.
@@ -61,4 +59,4 @@ NVIDIA_DRV_DEV_PKGS='
 	libglvnd-dev
 '
 
-apt autoremove $NVIDIA_DRV_DEV_PKGS
+apt autoremove -y $NVIDIA_DRV_DEV_PKGS
