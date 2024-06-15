@@ -42,7 +42,7 @@ apt install -y --no-install-recommends $NVIDIA_DRV_DEPS_PKGS
 chmod +x "$DESTINATION"/*
 for NV_DRV_RUN in "$DESTINATION"/*; do
     if [ -x "$NV_DRV_RUN" ]; then
-        "$NV_DRV_RUN" --dkms -s
+        "$NV_DRV_RUN" --dkms -s --no-x-check
     fi
 done
 
