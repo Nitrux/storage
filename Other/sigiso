@@ -64,10 +64,13 @@ def select_key(gpg):
 
 def sign_iso(gpg, iso_file, key_id):
     with open(iso_file, 'rb') as f:
-        signed_data = gpg.sign_file(f, key_id, detach=True, clearsign=False)
-    with open(f'{iso_file}.asc', 'wb') as f:
-        f.write(signed_data.data)
-    print("ISO file signed successfully.")
+        signed_data = gpg.sign_file(f, keyid=key_id, detach=True, output=f'{iso_file}.asc')
+    if signed_data.status == 'success':
+        print("ISO file signed successfully.")
+    else:
+        print("Failed to sign ISO file.")
+        print(f"Status: {signed_data.status}")
+        print(f"Stderr: {signed_data.stderr}")
 
 def main():
     parser = argparse.ArgumentParser(description='Sign an ISO file with a selected GPG key.')
@@ -75,7 +78,7 @@ def main():
     parser.add_argument('key_id', nargs='?', help='ID of the GPG key to use for signing')
     args = parser.parse_args()
 
-    if not args.iso_file and not args.key_id:
+    if len(vars(args)) == 1:
         parser.print_help()
         return
 
