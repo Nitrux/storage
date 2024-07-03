@@ -22,7 +22,7 @@
 #    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
 #############################################################################################################################################################################
 
-set -eu
+set -e
 
 
 # -- Function to check if card0 is using the amdgpu driver.
@@ -37,14 +37,14 @@ is_amdgpu() {
 case "$1" in
     "suspend")
         if is_amdgpu; then
-            /usr/bin/drm-wrapper-sleep
+            sleep 1 && loginctl lock-session && sleep 1 && /usr/bin/drm-wrapper-sleep
         else
             /usr/bin/elogind-loginctl suspend
         fi
         ;;
     "hibernate")
         if is_amdgpu; then
-            /usr/bin/drm-wrapper-hibernate
+            sleep 1 && loginctl lock-session && sleep 1 && /usr/bin/drm-wrapper-hibernate
         else
             /usr/bin/elogind-loginctl hibernate
         fi
