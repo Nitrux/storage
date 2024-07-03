@@ -27,4 +27,4 @@ set -e
 
 # -- Set the value of /sys/power/state to disk.
 
-echo disk | tee /sys/power/state
+echo disk | sudo tee /sys/power/state

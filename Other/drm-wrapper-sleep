@@ -27,4 +27,4 @@ set -e
 
 # -- Set the value of /sys/power/state to mem.
 
-echo mem | tee /sys/power/state
+echo mem | sudo tee /sys/power/state
