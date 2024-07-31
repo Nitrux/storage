@@ -4,4 +4,4 @@ We are pleased to announce the launch of Nitrux 3.6.0. This new version combines
 
 Nitrux 3.6.0 is available for immediate download.
 
-See the full changelog at https://nxos.org/changelog/release-announcement-nitrux-3-5-1/.
+See the full changelog at https://nxos.org/changelog/release-announcement-nitrux-3-6-0/.
