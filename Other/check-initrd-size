@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+check_initramfs_size() {
+  local initramfs_file
+  initramfs_file="/boot/initrd.img-$(uname -r)"
+
+  if [ -f "$initramfs_file" ]; then
+    echo "Initramfs file: $initramfs_file"
+    echo "Initramfs size:"
+    du -h --apparent-size "$initramfs_file" | awk '{printf "%.1fM\n", $1}'
+
+    echo "15 largest files in initramfs:"
+    lsinitramfs -l "$initramfs_file" | sort -rh -k5 | head -n 15 | awk '{printf "%.1fM %s %s\n", $5/1024/1024, $3, $NF}'
+  else
+    echo "Error: Initramfs file '$initramfs_file' not found."
+  fi
+}
+
+check_initramfs_size
