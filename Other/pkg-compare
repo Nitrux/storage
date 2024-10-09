@@ -80,18 +80,11 @@ def main():
         'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64',
         'apt-transport-https', 'linux-image-liquorix-amd64', 'libstdc++-13-dev',
         'libstdc++6', 'casper', 'calamares', 'calamares-qml-settings-nitrux', 'initramfs-tools',
-        'initramfs-tools-bin', 'initramfs-tools-core', 'dpkg-dev', 'libegl-dev', 'libgl-dev',
-        'libgles-dev', 'libglvnd-core-dev', 'libglvnd-dev', 'libglx-dev', 'libopengl-dev',
-        'libsysprof-capture-4-dev', 'libx11-dev', 'libxau-dev', 'libxcb1-dev', 'libxdmcp-dev',
-        'x11proto-dev', 'xtrans-dev', 'libegl-mesa0', 'libgbm1', 'libgl1-mesa-dri',
-        'libglapi-mesa', 'libglx-mesa0', 'libxatracker2', 'mesa-va-drivers',
-        'mesa-vdpau-drivers', 'mesa-vulkan-drivers',
+        'initramfs-tools-bin', 'initramfs-tools-core', 'dpkg-dev', 'libsysprof-capture-4-dev',
     ]
 
     exclude_patterns = [
         r'libnvidia-.*-\d+',
-        r'linux-headers-.*-liquorix-amd64-\d+',
-        r'linux-image-.*-liquorix-amd64-\d+',
         r'nvidia-.*-\d+',
         r'xserver-xorg-video-nvidia-\d+'
     ]
