@@ -25,6 +25,28 @@
 set -eu
 
 
+
+
+
+
+
+# -- Install the NVIDIA proprietary driver using the official installer.
+# -- This script is intended to be executed in a container.
+
+# -- Download the driver directly from NVIDIA.
+
+BASE_URL="http://download.nvidia.com/XFree86/Linux-x86_64/"
+USER_AGENT="BrightSign/8.2.55.5 (XT1144) Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) QtWebEngine/5.12.3 Chrome/69.0.3497.128 Safari/537.36"
+DESTINATION="$(mktemp -d)"
+NV_INST_VER="560.35.03"
+
+LATEST_FILE="$NV_INST_VER $NV_INST_VER/NVIDIA-Linux-x86_64-$NV_INST_VER.run"
+FILE_PATH="$(echo "$LATEST_FILE" | awk '{print $2}')"
+FULL_URL="${BASE_URL}${FILE_PATH}"
+
+axel -a -q -k -U "$USER_AGENT" -n 8 "$FULL_URL" -o "${DESTINATION}/$(basename "$FILE_PATH")"
+
+
 # -- Install the build dependencies.
 
 NVIDIA_DRV_DEPS_PKGS='
@@ -39,25 +61,6 @@ NVIDIA_DRV_DEPS_PKGS='
 '
 
 apt install -y --no-install-recommends $NVIDIA_DRV_DEPS_PKGS
-
-
-# -- Install the *LATEST* NVIDIA proprietary driver using the official installer.
-# -- Download the driver directly from NVIDIA.
-
-BASE_URL="http://download.nvidia.com/XFree86/Linux-x86_64/"
-LATEST_URL="${BASE_URL}latest.txt"
-USER_AGENT="BrightSign/8.2.55.5 (XT1144) Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) QtWebEngine/5.12.3 Chrome/69.0.3497.128 Safari/537.36"
-DESTINATION="$(mktemp -d)"
-
-axel -a -q -k -U "$USER_AGENT" -n 8 "$LATEST_URL" -o "${DESTINATION}/latest.txt"
-
-LATEST_FILE="$(cat "${DESTINATION}/latest.txt")"
-FILE_PATH="$(echo "$LATEST_FILE" | awk '{print $2}')"
-FULL_URL="${BASE_URL}${FILE_PATH}"
-
-axel -a -q -k -U "$USER_AGENT" -n 8 "$FULL_URL" -o "${DESTINATION}/$(basename "$FILE_PATH")"
-
-rm -f "${DESTINATION}/latest.txt"
 
 
 # -- Execute the installer.
@@ -82,6 +85,8 @@ fi
 NVIDIA_DRV_DEV_PKGS='
 	libglvnd-core-dev
 	libglvnd-dev
+	pkgconf
+	pkgconf-bin
 '
 
 apt autoremove -y $NVIDIA_DRV_DEV_PKGS
