@@ -25,11 +25,6 @@
 set -eu
 
 
-
-
-
-
-
 # -- Install the NVIDIA proprietary driver using the official installer.
 # -- This script is intended to be executed in a container.
 
