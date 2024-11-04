@@ -98,7 +98,7 @@ def show_progress(counter, total_items, start_time, current_item):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: py-rmdir <path_to_delete>")
+        print("Usage: py-rm <path_to_delete>")
         sys.exit(1)
 
     target_path = sys.argv[1]
