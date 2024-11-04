@@ -54,7 +54,6 @@ def delete_with_progress(path):
     total_items = count_items(path)
     counter = 0
     start_time = time.time()
-    recent_files = []
 
     try:
         for root, dirs, files in os.walk(path, topdown=False):
@@ -62,19 +61,13 @@ def delete_with_progress(path):
                 item_path = os.path.join(root, name)
                 os.remove(item_path)
                 counter += 1
-                recent_files.append(item_path)
-                if len(recent_files) > 3:
-                    recent_files.pop(0)
-                show_progress(counter, total_items, recent_files, start_time)
+                show_progress(counter, total_items, start_time)
 
             for name in dirs:
                 item_path = os.path.join(root, name)
                 shutil.rmtree(item_path)
                 counter += 1
-                recent_files.append(item_path)
-                if len(recent_files) > 3:
-                    recent_files.pop(0)
-                show_progress(counter, total_items, recent_files, start_time)
+                show_progress(counter, total_items, start_time)
 
         shutil.rmtree(path)
         print("\nDeletion complete!")
@@ -86,7 +79,7 @@ def delete_with_progress(path):
         print(f"\nError occurred: {e}")
         sys.exit(1)
 
-def show_progress(counter, total_items, recent_files, start_time):
+def show_progress(counter, total_items, start_time):
     terminal_width = get_terminal_size().columns
     bar_length = max(20, terminal_width - 40)
     percent_complete = (counter / total_items) * 100
@@ -97,14 +90,7 @@ def show_progress(counter, total_items, recent_files, start_time):
     filled_length = int(bar_length * counter // total_items)
     bar = '█' * filled_length + '-' * (bar_length - filled_length)
 
-    # Prepare the display of the last three deleted files, truncated if necessary
-    recent_display = "\n".join(
-        f"{'...' + f[-(terminal_width - 10):] if len(f) > terminal_width - 10 else f}"
-        for f in recent_files
-    )
-
-    # Clear lines and print the recent files followed by the progress bar
-    print(f"\033[F\033[K{recent_display}\033[K\n[{bar}] {percent_complete:.2f}% | ETA: {remaining_time_str}", end='\r', flush=True)
+    print(f"\r[{bar}] {percent_complete:.2f}% | {counter}/{total_items} | ETA: {remaining_time_str}", end='', flush=True)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
