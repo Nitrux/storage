@@ -61,13 +61,13 @@ def delete_with_progress(path):
                 item_path = os.path.join(root, name)
                 os.remove(item_path)
                 counter += 1
-                show_progress(counter, total_items, start_time)
+                show_progress(counter, total_items, start_time, item_path)
 
             for name in dirs:
                 item_path = os.path.join(root, name)
                 shutil.rmtree(item_path)
                 counter += 1
-                show_progress(counter, total_items, start_time)
+                show_progress(counter, total_items, start_time, item_path)
 
         shutil.rmtree(path)
         print("\nDeletion complete!")
@@ -79,9 +79,9 @@ def delete_with_progress(path):
         print(f"\nError occurred: {e}")
         sys.exit(1)
 
-def show_progress(counter, total_items, start_time):
+def show_progress(counter, total_items, start_time, current_item):
     terminal_width = get_terminal_size().columns
-    bar_length = max(20, terminal_width - 40)
+    bar_length = max(20, terminal_width - 60)
     percent_complete = (counter / total_items) * 100
     elapsed_time = time.time() - start_time
     estimated_total_time = (elapsed_time / counter) * total_items if counter > 0 else 0
@@ -90,7 +90,11 @@ def show_progress(counter, total_items, start_time):
     filled_length = int(bar_length * counter // total_items)
     bar = '█' * filled_length + '-' * (bar_length - filled_length)
 
-    print(f"\r[{bar}] {percent_complete:.2f}% | {counter}/{total_items} | ETA: {remaining_time_str}", end='', flush=True)
+    max_path_length = max(0, terminal_width - bar_length - 40)
+    if len(current_item) > max_path_length:
+        current_item = "..." + current_item[-(max_path_length - 3):]
+
+    print(f"\r{current_item} [{bar}] {percent_complete:.2f}% | {counter}/{total_items} | ETA: {remaining_time_str}", end='', flush=True)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
