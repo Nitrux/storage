@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Gamescope Steam Session (Wayland)
+Comment=Run Gamescope with Steam in Big Picture Mode
+Exec=/usr/bin/gamescope-steam-session
+Type=Application
