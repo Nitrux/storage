@@ -48,4 +48,3 @@ fi
     
     echo "Session ended at $(date)"
 } &>> "$LOG_FILE"
-
