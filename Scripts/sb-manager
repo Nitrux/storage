@@ -80,15 +80,13 @@ enroll_password=$(pwgen -ys 6 1)
 
 echo "$enroll_password" | pkexec mokutil --import "$der_cert_path"
 
-kdialog --msgbox "A random, unique password has been generated to enroll the MOK in the UEFI on reboot. 
+kdialog --msgbox "A random, unique password has been generated to enroll the MOK in the UEFI on reboot.
 
-Generated password: $enroll_password
+Password: $enroll_password
 
-Do not lose this password! It is also required if you need to remove the MOK in the future. Please write it down or save it securely."
+Save it securely, as it is also required to remove the MOK in the future. Follow the instructions on reboot to complete the enrollment."
 
-kdialog --msgbox "A password will be required to enroll the MOK in the UEFI on reboot. Please follow the instructions on the screen."
-
-notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
-    "Successfully enrolled MOK in UEFI. Reboot to approve MOK enrollment in MOKManager."
+notify-send -a "System Message" -u critical -i "preferences-system-login" \
+    "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
 
 pkexec reboot
