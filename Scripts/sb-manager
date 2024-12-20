@@ -76,22 +76,30 @@ notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfu
 # -- Enroll the certificate in UEFI.
 # -- Use kdialog to inform the user about the enrollment password.
 
-notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
+notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Checking if MOK is already enrolled, please wait..."
 
-enroll_password=$(pwgen -ys 6 1)
+if pkexec mokutil --test-key "$der_cert_path" 2>&1 | grep -q "is already enrolled"; then
+    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" \
+        "MOK is already enrolled. No further enrollment is required."
+else
+    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" \
+        "MOK is not enrolled. Enrolling the certificate now."
+    
+    enroll_password=$(pwgen -ys 6 1)
+    
+    kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.
 
-kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.
+    Password: \"$enroll_password\"
 
-Password: \"$enroll_password\"
+    Save it securely, as it is also required to remove the MOK in the future."
 
-Save it securely, as it is also required to remove the MOK in the future."
+    echo "Please use the following password for MOK enrollment: \"$enroll_password\""
+    echo "Note: The mokutil input password prompt will not display characters as you type."
 
-echo "Please use the following password for MOK enrollment: \"$enroll_password\""
-echo "Note: The mokutil input password prompt will not display characters as you type."
+    pkexec mokutil --import "$der_cert_path"
 
-pkexec mokutil --import "$der_cert_path"
+    notify-send -a "NX Secure Boot Manager" -u critical -i "preferences-system-login" \
+        "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
 
-notify-send -a "NX Secure Boot Manager" -u critical -i "preferences-system-login" \
-    "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
-
-pkexec reboot
+    pkexec reboot
+fi
