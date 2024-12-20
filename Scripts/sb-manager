@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2024> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+
+# -- Exit on errors and undefined variables.
+
+set -euo pipefail
+
+
+# -- Check Secure Boot status.
+
+notify-send -a "System Message" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
+sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
+
+if [[ "$sb_state" == "disabled" ]]; then
+    notify-send -a "System Message" -i "preferences-system-login" "Secure Boot is not enabled, nothing to do here."
+    exit 0
+fi
+
+
+# -- Check if signing key and certificate files exist.
+
+key_path="/var/lib/shim-signed/mok/MOK-Kernel.priv"
+cert_path="/var/lib/shim-signed/mok/MOK-Kernel.pem"
+der_cert_path="/var/lib/shim-signed/mok/MOK-Kernel.der"
+
+if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
+    notify-send -a "System Message" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
+    
+    update-secureboot-policy --new-key
+    for ext in der priv; do
+        mv "/var/lib/shim-signed/mok/MOK.$ext" "/var/lib/shim-signed/mok/MOK-Kernel.$ext"
+    done
+    openssl x509 -inform der -in "$der_cert_path" -out "$cert_path"
+    
+    notify-send -a "System Message" -i "preferences-system-login" "Successfully generated MOK, continuing..."
+fi
+
+
+# -- Sign the latest kernel.
+
+latest_kernel=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
+signed_kernel="/boot/$(basename "$latest_kernel")"
+
+notify-send -a "System Message" -i "preferences-system-login" "Signing $latest_kernel with MOK, please wait..."
+sbsign --key "$key_path" --cert "$cert_path" --output "$signed_kernel" "$latest_kernel"
+
+sbverify --list "$signed_kernel"
+notify-send -a "System Message" -i "preferences-system-login" "Successfully signed $latest_kernel with MOK, continuing..."
+
+
+# -- Enroll the certificate in UEFI.
+
+notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
+mokutil --import "$der_cert_path"
+
+
+# -- Use kdialog to inform the user about the password for enrollment.
+
+kdialog --msgbox "A password will be required to enroll the MOK in the UEFI on reboot. Please follow the instructions on the screen."
+
+notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
+    "Successfully enrolled MOK in UEFI. Reboot to approve MOK enrollment in MOKManager."
+pkexec reboot
