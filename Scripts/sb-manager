@@ -34,13 +34,11 @@ notify-send -a "System Message" -i "preferences-system-login" "Checking Secure B
 sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$sb_state" == "disabled" ]]; then
-    if ! kdialog --yesno "Secure Boot is not enabled. Do you still want to sign the kernel?" --title "Secure Boot Disabled"; then
+    if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "Secure Boot Manager"; then
         notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
             "Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
         exit 0
     fi
-    notify-send -a "System Message" -i "preferences-system-login" \
-        "Proceeding with kernel signing despite Secure Boot being disabled."
 fi
 
 
