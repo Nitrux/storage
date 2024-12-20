@@ -72,15 +72,23 @@ notify-send -a "System Message" -i "preferences-system-login" "Successfully sign
 
 
 # -- Enroll the certificate in UEFI.
+# -- Use kdialog to inform the user about the enrollment password.
 
 notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
-pkexec mokutil --import "$der_cert_path"
 
+enroll_password=$(pwgen -ys 6 1)
 
-# -- Use kdialog to inform the user about the enrollment password.
+echo "$enroll_password" | pkexec mokutil --import "$der_cert_path"
+
+kdialog --msgbox "A random, unique password has been generated to enroll the MOK in the UEFI on reboot. 
+
+Generated password: $enroll_password
+
+Do not lose this password! It is also required if you need to remove the MOK in the future. Please write it down or save it securely."
 
 kdialog --msgbox "A password will be required to enroll the MOK in the UEFI on reboot. Please follow the instructions on the screen."
 
 notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
     "Successfully enrolled MOK in UEFI. Reboot to approve MOK enrollment in MOKManager."
+
 pkexec reboot
