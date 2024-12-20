@@ -80,13 +80,15 @@ notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Enrolling
 
 enroll_password=$(pwgen -ys 6 1)
 
-echo "$enroll_password" | pkexec mokutil --import "$der_cert_path"
-
 kdialog --msgbox "A random, unique password has been generated to enroll the MOK in the UEFI on reboot.
 
 Password: $enroll_password
 
 Save it securely, as it is also required to remove the MOK in the future. Follow the instructions on reboot to complete the enrollment."
+
+echo "Please use the following password for MOK enrollment: $enroll_password"
+
+pkexec mokutil --import "$der_cert_path"
 
 notify-send -a "NX Secure Boot Manager" -u critical -i "preferences-system-login" \
     "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
