@@ -30,12 +30,12 @@ set -euo pipefail
 
 # -- Check Secure Boot status.
 
-notify-send -a "System Message" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
+notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
 sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$sb_state" == "disabled" ]]; then
-    if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "Secure Boot Manager"; then
-        notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
+    if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "NX Secure Boot Manager"; then
+        notify-send -a "NX Secure Boot Manager" -u critical --action=Understood -i "preferences-system-login" \
             "Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
         exit 0
     fi
@@ -49,7 +49,7 @@ cert_path="/var/lib/shim-signed/mok/MOK-Kernel.pem"
 der_cert_path="/var/lib/shim-signed/mok/MOK-Kernel.der"
 
 if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
-    notify-send -a "System Message" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
+    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
     
     pkexec bash -c "
         update-secureboot-policy --new-key
@@ -59,7 +59,7 @@ if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
         openssl x509 -inform der -in \"$der_cert_path\" -out \"$cert_path\"
     "
     
-    notify-send -a "System Message" -i "preferences-system-login" "Successfully generated MOK, continuing..."
+    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfully generated MOK, continuing..."
 fi
 
 
@@ -68,15 +68,15 @@ fi
 latest_kernel=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
 signed_kernel="/boot/$(basename "$latest_kernel")"
 
-notify-send -a "System Message" -i "preferences-system-login" "Signing $latest_kernel with MOK, please wait..."
+notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Signing $latest_kernel with MOK, please wait..."
 pkexec sbsign --key "$key_path" --cert "$cert_path" --output "$signed_kernel" "$latest_kernel"
-notify-send -a "System Message" -i "preferences-system-login" "Successfully signed $latest_kernel with MOK, continuing..."
+notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfully signed $latest_kernel with MOK, continuing..."
 
 
 # -- Enroll the certificate in UEFI.
 # -- Use kdialog to inform the user about the enrollment password.
 
-notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
+notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
 
 enroll_password=$(pwgen -ys 6 1)
 
@@ -88,7 +88,7 @@ Password: $enroll_password
 
 Save it securely, as it is also required to remove the MOK in the future. Follow the instructions on reboot to complete the enrollment."
 
-notify-send -a "System Message" -u critical -i "preferences-system-login" \
+notify-send -a "NX Secure Boot Manager" -u critical -i "preferences-system-login" \
     "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
 
 pkexec reboot
