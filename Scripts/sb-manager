@@ -34,7 +34,7 @@ notify-send -a "System Message" -i "preferences-system-login" "Checking Secure B
 sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$sb_state" == "disabled" ]]; then
-    notify-send -a "System Message" -u critical --action=Understood -i i "preferences-system-login" "Secure Boot is not enabled, nothing to do here."
+    notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" "Secure Boot is not enabled, nothing to do here."
     exit 0
 fi
 
