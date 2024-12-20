@@ -91,7 +91,7 @@ else
 
     Password: \"$enroll_password\"
 
-    Save it securely, as it is also required to remove the MOK in the future."
+    Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management."
 
     echo "Please use the following password for MOK enrollment: \"$enroll_password\""
     echo "Note: The mokutil input password prompt will not display characters as you type."
