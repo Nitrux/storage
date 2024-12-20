@@ -34,12 +34,17 @@ notify-send -a "System Message" -i "preferences-system-login" "Checking Secure B
 sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$sb_state" == "disabled" ]]; then
-    notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" "Secure Boot is not enabled, nothing to do here."
-    exit 0
+    if ! kdialog --yesno "Secure Boot is not enabled. Do you still want to sign the kernel?" --title "Secure Boot Disabled"; then
+        notify-send -a "System Message" -u critical --action=Understood -i "preferences-system-login" \
+            "Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
+        exit 0
+    fi
+    notify-send -a "System Message" -i "preferences-system-login" \
+        "Proceeding with kernel signing despite Secure Boot being disabled."
 fi
 
 
-# -- Check if signing key and certificate files exist.
+# -- Check if the signing key and certificate files exist.
 
 key_path="/var/lib/shim-signed/mok/MOK-Kernel.priv"
 cert_path="/var/lib/shim-signed/mok/MOK-Kernel.pem"
@@ -76,7 +81,7 @@ notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in 
 mokutil --import "$der_cert_path"
 
 
-# -- Use kdialog to inform the user about the password for enrollment.
+# -- Use kdialog to inform the user about the enrollment password.
 
 kdialog --msgbox "A password will be required to enroll the MOK in the UEFI on reboot. Please follow the instructions on the screen."
 
