@@ -76,17 +76,18 @@ notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfu
 # -- Enroll the certificate in UEFI.
 # -- Use kdialog to inform the user about the enrollment password.
 
-notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
+notify-send -a "System Message" -i "preferences-system-login" "Enrolling MOK in UEFI, please wait..."
 
 enroll_password=$(pwgen -ys 6 1)
 
-kdialog --msgbox "A random, unique password has been generated to enroll the MOK in the UEFI on reboot.
+kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.
 
-Password: $enroll_password
+Password: \"$enroll_password\"
 
-Save it securely, as it is also required to remove the MOK in the future. Follow the instructions on reboot to complete the enrollment."
+Save it securely, as it is also required to remove the MOK in the future."
 
-echo "Please use the following password for MOK enrollment: $enroll_password"
+echo "Please use the following password for MOK enrollment: \"$enroll_password\""
+echo "Note: The mokutil input password prompt will not display characters as you type."
 
 pkexec mokutil --import "$der_cert_path"
 
