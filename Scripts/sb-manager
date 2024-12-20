@@ -55,7 +55,7 @@ if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
     
     pkexec update-secureboot-policy --new-key
     for ext in der priv; do
-        mv "/var/lib/shim-signed/mok/MOK.$ext" "/var/lib/shim-signed/mok/MOK-Kernel.$ext"
+        pkexec mv "/var/lib/shim-signed/mok/MOK.$ext" "/var/lib/shim-signed/mok/MOK-Kernel.$ext"
     done
     pkexec openssl x509 -inform der -in "$der_cert_path" -out "$cert_path"
     
