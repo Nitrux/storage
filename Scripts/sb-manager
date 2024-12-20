@@ -51,11 +51,13 @@ der_cert_path="/var/lib/shim-signed/mok/MOK-Kernel.der"
 if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
     notify-send -a "System Message" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
     
-    pkexec update-secureboot-policy --new-key
-    for ext in der priv; do
-        pkexec mv "/var/lib/shim-signed/mok/MOK.$ext" "/var/lib/shim-signed/mok/MOK-Kernel.$ext"
-    done
-    pkexec openssl x509 -inform der -in "$der_cert_path" -out "$cert_path"
+    pkexec bash -c "
+        update-secureboot-policy --new-key
+        for ext in der priv; do
+            mv \"/var/lib/shim-signed/mok/MOK.\$ext\" \"/var/lib/shim-signed/mok/MOK-Kernel.\$ext\"
+        done
+        openssl x509 -inform der -in \"$der_cert_path\" -out \"$cert_path\"
+    "
     
     notify-send -a "System Message" -i "preferences-system-login" "Successfully generated MOK, continuing..."
 fi
