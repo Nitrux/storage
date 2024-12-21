@@ -182,7 +182,7 @@ else
 
 	overlay_ch mokutil --import "$DER_CERT_PATH"
 
-	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "Task Complete" "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
 fi
 
 #   ====== END ======
