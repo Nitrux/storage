@@ -311,6 +311,6 @@ pkexec mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "All Tasks Completed" "$TOOL_NAME succesfully completed all its tasks."
 
-kdialog --msgbox "Reboot and approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager).<br>After approving the MOK enrollment, enable Secure Boot in the UEFI (if necessary) and boot $(echo \"$TARGET_DIST\" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+kdialog --msgbox "Reboot and approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager), select <strong>Enroll MOK</strong> then <strong>Continue</strong> and <strong>Yes</strong>, finally, enter the password.<br><br>After approving the MOK enrollment, reboot and enable Secure Boot in the UEFI (if necessary) and boot $(echo \"$TARGET_DIST\" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
 
 #   ====== END ======
