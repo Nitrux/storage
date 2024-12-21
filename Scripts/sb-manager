@@ -123,6 +123,22 @@ if [[ "$SB_STATE" == "disabled" ]]; then
 fi
 
 
+# -- Check for the overlayroot-chroot executable and mounts using OverlayFS.
+# -- Quit if either of these checks fails since OverlayFS is assumed to be used.
+
+OVERLAYROOT_CHROOT="/usr/sbin/overlayroot-chroot"
+
+if [[ ! -f "$OVERLAYROOT_CHROOT" ]]; then
+	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "Overlayroot Missing" "The executable $OVERLAYROOT_CHROOT was not found. Quitting."
+	exit 1
+fi
+
+if ! mount | grep -q "overlayroot"; then
+	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "No OverlayFS Detected" "No OverlayFS mounts are in use. $TOOL_NAME requires OverlayFS to be active. Quitting."
+	exit 1
+fi
+
+
 # -- Mount efivarfs filesystem.
 
 overlay_ch mount -t efivarfs efivarfs /sys/firmware/efi/efivars
@@ -158,9 +174,15 @@ fi
 LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
 SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
-overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Checking if $LATEST_KERNEL is already signed, please wait..."
+
+if sbverify --list "$LATEST_KERNEL" 2>&1 | grep -q "No signature table present"; then
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
+    overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
+else
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Skipped" "$LATEST_KERNEL is already signed. No further action required."
+fi
 
 
 # -- Enroll the certificate in UEFI.
@@ -177,8 +199,8 @@ else
 
 	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management." --title "$TOOL_NAME"
 
-	echo "Please use the following password for MOK enrollment: $ENROLL_PASSWORD"
-	echo "Note: The mokutil input password prompt will not display characters as you type."
+	puts_info "Please use the following password for MOK enrollment: $ENROLL_PASSWORD"
+	puts_info "Note: The mokutil input password prompt will not display characters as you type."
 
 	overlay_ch mokutil --import "$DER_CERT_PATH"
 
