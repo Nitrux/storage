@@ -93,12 +93,6 @@ overlay_ch() {
 	"${ROOT[@]}"
 }
 
-cleanup() {
-    overlay_ch umount /var/lib || true
-    overlay_ch umount /dev || true
-}
-trap cleanup EXIT
-
 
 # -- Variables.
 
@@ -315,9 +309,8 @@ puts_info "Use generated password: $ENROLL_PASSWORD"
 
 pkexec mokutil --import "$DER_CERT_PATH"
 
-notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
+notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "All Tasks Completed" "$TOOL_NAME succesfully completed all its tasks."
 
-cleanup
-
+kdialog --msgbox "Reboot now to approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager)."
 
 #   ====== END ======
