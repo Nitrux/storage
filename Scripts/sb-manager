@@ -93,6 +93,17 @@ overlay_ch() {
 	"${ROOT[@]}"
 }
 
+unmount_directory() {
+	local DIRECTORY="$1"
+
+	if mountpoint -q "$DIRECTORY"; then
+	puts_info "Unmounting: $DIRECTORY"
+	umount "$DIRECTORY"
+	else
+	puts_info "Directory is not mounted: $DIRECTORY"
+	fi
+}
+
 
 # -- Variables.
 
@@ -112,8 +123,8 @@ PEM_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.pem"
 
 CONFIGFILE="/etc/ssl/openssl-mok.cnf"
 
-LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
-SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
+SELECTED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION"
+SIGNED_KERNEL_TEMP="/boot/vmlinuz-$SELECTED_VERSION.signed-temp"
 
 ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
@@ -284,19 +295,22 @@ done
 SELECTED_VERSION=$(kdialog --title "$TOOL_NAME" --combobox "Select the kernel version to sign:" "${KERNEL_VERSIONS[@]}")
 
 if [[ -z "$SELECTED_VERSION" ]]; then
-    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
-        "Task Canceled" "No kernel version selected for signing. Exiting."
+    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Canceled" "No kernel version selected for signing. Exiting."
     exit 1
 fi
 
-SELECTED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION"
-SIGNED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION.signed"
-
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing kernel version $SELECTED_VERSION with MOK, please wait..."
 
-overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$SELECTED_KERNEL"
+overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL_TEMP" "$SELECTED_KERNEL"
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed kernel version $SELECTED_VERSION with MOK, continuing..."
+if overlay_ch sbverify --list "$SIGNED_KERNEL_TEMP"; then
+    overlay_ch mv "$SIGNED_KERNEL_TEMP" "$SELECTED_KERNEL"
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed kernel version $SELECTED_VERSION with MOK, continuing..."
+else
+    overlay_ch rm -f "$SIGNED_KERNEL_TEMP"
+    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Signing Failed" "Failed to sign kernel version $SELECTED_VERSION. Exiting."
+    unmount_directory "$VAR_LIB_PARTITION" || { puts_error "Failed to unmount NX_VAR_LIB, quitting."; exit 1; }
+fi
 
 
 # -- Enroll the certificate in UEFI.
