@@ -165,7 +165,7 @@ else
 
 	ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
-	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br>Password: $ENROLL_PASSWORD<br>Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management." --title "$TOOL_NAME"
+	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management." --title "$TOOL_NAME"
 
 	echo "Please use the following password for MOK enrollment: \"$ENROLL_PASSWORD\""
 	echo "Note: The mokutil input password prompt will not display characters as you type."
