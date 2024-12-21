@@ -313,7 +313,7 @@ kdialog --msgbox "We generated a random password to enroll the MOK in mokutil an
 
 puts_info "Use generated password: $ENROLL_PASSWORD"
 
-mokutil --import "$DER_CERT_PATH"
+pkexec mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
 
