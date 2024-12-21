@@ -192,8 +192,10 @@ else
 	puts_info "Note: The mokutil input password prompt will not display characters as you type."
 
 	overlay_ch mokutil --import "$DER_CERT_PATH"
+	overlay_ch umount /var/lib
+	overlay_ch umount /dev
 
-	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
 fi
 
 #   ====== END ======
