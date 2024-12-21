@@ -169,15 +169,9 @@ fi
 LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
 SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Checking if $LATEST_KERNEL is already signed, please wait..."
-
-if sbverify --list "$LATEST_KERNEL" 2>&1 | grep -q "No signature table present"; then
-    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
-    overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
-    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
-else
-    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Skipped" "$LATEST_KERNEL is already signed. No further action required."
-fi
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
+overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
 
 
 # -- Enroll the certificate in UEFI.
