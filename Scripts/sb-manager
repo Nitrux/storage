@@ -25,7 +25,7 @@
 
 # -- Exit on errors.
 
-set -eu
+set -xeu
 
 
 # -- Set program name and version.
@@ -129,12 +129,12 @@ fi
 OVERLAYROOT_CHROOT="/usr/sbin/overlayroot-chroot"
 
 if [[ ! -f "$OVERLAYROOT_CHROOT" ]]; then
-	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "Overlayroot Missing" "The executable $OVERLAYROOT_CHROOT was not found. Quitting."
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i  "preferences-system-login" "Overlayroot Missing" "The executable $OVERLAYROOT_CHROOT was not found."
 	exit 1
 fi
 
 if ! mount | grep -q "overlayroot"; then
-	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "No OverlayFS Detected" "No OverlayFS mounts are in use. $TOOL_NAME requires OverlayFS to be active. Quitting."
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i  "preferences-system-login" "No OverlayFS Detected" "No OverlayFS mounts are in use. $TOOL_NAME requires OverlayFS to be active."
 	exit 1
 fi
 
@@ -144,24 +144,30 @@ fi
 overlay_ch mount -t devtmpfs dev /dev
 
 
+# -- Check if the signing key and certificate files exist and rename the files.
+
+if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Generating new MOK for Secure Boot, please wait..."
+
+	pkexec bash -c "
+			rm -r /var/lib/shim-signed/mok/*
+			update-secureboot-policy --new-key
+			for ext in der priv; do
+				mv \"/var/lib/shim-signed/mok/MOK.\$ext\" \"/var/lib/shim-signed/mok/MOK-Kernel.\$ext\"
+			done
+			openssl x509 -inform der -in \"$DER_CERT_PATH\" -out \"$PEM_CERT_PATH\"
+		"
+
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated MOK, continuing..."
+fi
+
+
 # -- Mount NX_VAR_LIB partition.
-# -- We need to mount this partition because update-secureboot-policy creates the files in /var/lib.
+# -- We need to mount this partition because sbsign needs to run in the lower directory and /var/lib is not accessible there.
 
 VAR_LIB_PARTITION=$(findfs LABEL=NX_VAR_LIB)
 
 overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib
-
-
-# -- Check if the signing key and certificate files exist.
-
-if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Generating MOK for Secure Boot, please wait..."
-	overlay_ch update-secureboot-policy --new-key
-	overlay_ch mv /var/lib/shim-signed/mok/MOK.priv "$MOK_SKEY_PATH"
-	overlay_ch mv /var/lib/shim-signed/mok/MOK.der "$DER_CERT_PATH"
-	overlay_ch openssl x509 -inform der -in "$DER_CERT_PATH" -out "$PEM_CERT_PATH"
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated MOK, continuing..."
-fi
 
 
 # -- Sign the latest kernel.
@@ -186,16 +192,19 @@ else
 
 	ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
-	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management." --title "$TOOL_NAME"
+	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required for removing the MOK." --title "$TOOL_NAME"
 
-	puts_info "Please use the following password for MOK enrollment: $ENROLL_PASSWORD"
+	puts_info "Use the following password for MOK enrollment: $ENROLL_PASSWORD"
 	puts_info "Note: The mokutil input password prompt will not display characters as you type."
 
+	overlay_ch mount -t efivarfs efivarfs /sys/firmware/efi/efivars
 	overlay_ch mokutil --import "$DER_CERT_PATH"
-	overlay_ch umount /var/lib
-	overlay_ch umount /dev
-
+	
 	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
 fi
+
+overlay_ch umount /var/lib
+overlay_ch umount /dev
+
 
 #   ====== END ======
