@@ -123,9 +123,6 @@ PEM_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.pem"
 
 CONFIGFILE="/etc/ssl/openssl-mok.cnf"
 
-SELECTED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION"
-SIGNED_KERNEL_TEMP="/boot/vmlinuz-$SELECTED_VERSION.signed-temp"
-
 ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
 #   ====== START ======
@@ -298,6 +295,9 @@ if [[ -z "$SELECTED_VERSION" ]]; then
     notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Canceled" "No kernel version selected for signing. Exiting."
     exit 1
 fi
+
+SELECTED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION"
+SIGNED_KERNEL_TEMP="/boot/vmlinuz-$SELECTED_VERSION.signed-temp"
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing kernel version $SELECTED_VERSION with MOK, please wait..."
 
