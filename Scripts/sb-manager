@@ -98,6 +98,7 @@ overlay_ch() {
 
 CURRENT_DIST=$(awk -F'=' '/VERSION_CODENAME/{print $NF}' /etc/os-release)
 TARGET_DIST="nitrux"
+PRETTY_DIST=$(awk -F'=' '/PRETTY_NAME/{print $NF}' /etc/os-release)
 
 SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
@@ -311,6 +312,6 @@ pkexec mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "All Tasks Completed" "$TOOL_NAME succesfully completed all its tasks."
 
-kdialog --msgbox "Reboot and approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager), select <strong>Enroll MOK</strong> then <strong>Continue</strong> and <strong>Yes</strong>, finally, enter the password.<br><br>After approving the MOK enrollment, reboot and enable Secure Boot in the UEFI (if necessary) and boot $(echo \"$TARGET_DIST\" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+kdialog --msgbox "Reboot and approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager), select <strong>Enroll MOK</strong> then <strong>Continue</strong> and <strong>Yes</strong>, finally, enter the password.<br><br>After approving the MOK enrollment, reboot and enable Secure Boot in the UEFI (if necessary) and boot \"$PRETTY_DIST\""
 
 #   ====== END ======
