@@ -102,6 +102,15 @@ PEM_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.pem"
 
 #   ====== START ======
 
+# -- Check if using UEFI or Legacy.
+
+if [ ! -d /sys/firmware/efi ]; then
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
+		"Legacy (BIOS) Mode Detected" "This tool requires the system to be booted in UEFI Mode."
+	exit 1
+fi
+
+
 # -- Check Secure Boot status.
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
@@ -110,10 +119,15 @@ SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 if [[ "$SB_STATE" == "disabled" ]]; then
 	if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "$TOOL_NAME"; then
 		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
-			"Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
+			"Kernel Signing Canceled" "If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
 		exit 0
 	fi
 fi
+
+
+# -- Mount efivarfs filesystem.
+
+overlay_ch mount -t efivarfs efivarfs /sys/firmware/efi/efivars
 
 
 # -- Mount the devices filesystem.
@@ -132,12 +146,12 @@ overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib
 # -- Check if the signing key and certificate files exist.
 
 if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Secure Boot Enabled" "Generating MOK for Secure Boot, please wait..."
 	overlay_ch update-secureboot-policy --new-key
 	overlay_ch mv /var/lib/shim-signed/mok/MOK.priv "$MOK_SKEY_PATH"
 	overlay_ch mv /var/lib/shim-signed/mok/MOK.der "$DER_CERT_PATH"
 	overlay_ch openssl x509 -inform der -in "$DER_CERT_PATH" -out "$PEM_CERT_PATH"
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Successfully generated MOK, continuing..."
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated MOK, continuing..."
 fi
 
 
@@ -146,22 +160,20 @@ fi
 LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
 SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Signing $LATEST_KERNEL with MOK, please wait..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
 overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
 
 
 # -- Enroll the certificate in UEFI.
 # -- Use kdialog to inform the user about the enrollment password.
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Checking if MOK is already enrolled, please wait..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Checking if MOK is already enrolled, please wait..."
 
 if pkexec mokutil --test-key "$DER_CERT_PATH" 2>&1 | grep -q "is already enrolled"; then
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" \
-		"MOK is already enrolled. No further enrollment is required."
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "MOK is already enrolled. No further enrollment is required."
 else
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" \
-		"MOK is not enrolled. Enrolling the certificate now."
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "MOK is not enrolled. Enrolling the certificate now."
 
 	ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
@@ -172,8 +184,7 @@ else
 
 	overlay_ch mokutil --import "$DER_CERT_PATH"
 
-	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" \
-		"MOK enrollment successful. Reboot now to approve MOK in MOKManager."
+	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "Task Complete" "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
 fi
 
 #   ====== END ======
