@@ -134,8 +134,8 @@ overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib
 if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
 	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
 	overlay_ch update-secureboot-policy --new-key
-	overlay_ch mv /var/lib/shim/signed/mok/MOK.priv "$MOK_SKEY_PATH"
-	overlay_ch mv /var/lib/shim/signed/mok/MOK.der "$DER_CERT_PATH"
+	overlay_ch mv /var/lib/shim-signed/mok/MOK.priv "$MOK_SKEY_PATH"
+	overlay_ch mv /var/lib/shim-signed/mok/MOK.der "$DER_CERT_PATH"
 	overlay_ch openssl x509 -inform der -in \"$DER_CERT_PATH\" -out \"$PEM_CERT_PATH\"
 	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Successfully generated MOK, continuing..."
 fi
