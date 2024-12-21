@@ -23,83 +23,163 @@
 #############################################################################################################################################################################
 
 
-# -- Exit on errors and undefined variables.
+# -- Exit on errors.
 
-set -euo pipefail
+set -eu
 
+
+# -- Set program name and version.
+
+TOOL_NAME="Nitrux SB Manager"
+
+
+# -- Print informative messages to stderr.
+
+puts_info() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[34mInfo:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print success messages to stderr.
+
+puts_success() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[32mSuccess:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print error messages to stderr.
+
+puts_error() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[31mError:\e[0m %b\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print messages or text using multiple lines to stderr.
+
+print_message() {
+	if [ $# -eq 0 ]; then
+		printf "\n" >&2
+	else
+		printf "%s\n" "$@" >&2
+	fi
+}
+
+
+# -- Print warning messages to stderr.
+
+puts_warning() {
+    if [ -n "$1" ]; then
+        printf "%s: \e[33mWarning:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+    fi
+}
+
+
+# -- Functions.
+
+overlay_ch() {
+	local ROOT=("pkexec" "overlayroot-chroot" "$@")
+
+	if ! command -v "${ROOT[0]}" >/dev/null 2>&1; then
+		puts_error "Error: '${ROOT[0]}' command not found. Please make sure it's installed and try again, quitting."
+		return 1
+	fi
+
+	"${ROOT[@]}"
+}
+
+
+# -- Variables.
+
+MOK_SKEY_PATH="/var/lib/shim-signed/mok/MOK-Kernel.priv"
+DER_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.der"
+PEM_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.pem"
+
+#   ====== START ======
 
 # -- Check Secure Boot status.
 
-notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
-sb_state=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
+SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
-if [[ "$sb_state" == "disabled" ]]; then
-    if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "NX Secure Boot Manager"; then
-        notify-send -a "NX Secure Boot Manager" -u critical --action=Understood -i "preferences-system-login" \
-            "Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
-        exit 0
-    fi
+if [[ "$SB_STATE" == "disabled" ]]; then
+	if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "$TOOL_NAME"; then
+		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
+			"Kernel signing canceled. If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
+		exit 0
+	fi
 fi
+
+
+# -- Mount the devices filesystem.
+
+overlay_ch mount -t devtmpfs dev /dev
+
+
+# -- Mount NX_VAR_LIB partition.
+# -- We need to mount this partition because update-secureboot-policy creates the files in /var/lib.
+
+VAR_LIB_PARTITION=$(findfs LABEL=NX_VAR_LIB)
+
+overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib
 
 
 # -- Check if the signing key and certificate files exist.
 
-key_path="/var/lib/shim-signed/mok/MOK-Kernel.priv"
-cert_path="/var/lib/shim-signed/mok/MOK-Kernel.pem"
-der_cert_path="/var/lib/shim-signed/mok/MOK-Kernel.der"
-
-if [[ ! -f "$key_path" || ! -f "$cert_path" ]]; then
-    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
-    
-    pkexec bash -c "
-        update-secureboot-policy --new-key
-        for ext in der priv; do
-            mv \"/var/lib/shim-signed/mok/MOK.\$ext\" \"/var/lib/shim-signed/mok/MOK-Kernel.\$ext\"
-        done
-        openssl x509 -inform der -in \"$der_cert_path\" -out \"$cert_path\"
-    "
-    
-    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfully generated MOK, continuing..."
+if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Secure Boot is enabled. Generating MOK for Secure Boot, please wait..."
+	overlay_ch update-secureboot-policy --new-key
+	overlay_ch mv /varlib/shim/signed/mok/MOK.priv "$MOK_SKEY_PATH"
+	overlay_ch mv /varlib/shim/signed/mok/MOK.der "$DER_CERT_PATH"
+	overlay_ch openssl x509 -inform der -in \"$DER_CERT_PATH\" -out \"$PEM_CERT_PATH\"
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Successfully generated MOK, continuing..."
 fi
 
 
 # -- Sign the latest kernel.
 
-latest_kernel=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
-signed_kernel="/boot/$(basename "$latest_kernel")"
+LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
+SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
 
-notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Signing $latest_kernel with MOK, please wait..."
-pkexec sbsign --key "$key_path" --cert "$cert_path" --output "$signed_kernel" "$latest_kernel"
-notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Successfully signed $latest_kernel with MOK, continuing..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Signing $LATEST_KERNEL with MOK, please wait..."
+overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
 
 
 # -- Enroll the certificate in UEFI.
 # -- Use kdialog to inform the user about the enrollment password.
 
-notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" "Checking if MOK is already enrolled, please wait..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Checking if MOK is already enrolled, please wait..."
 
-if pkexec mokutil --test-key "$der_cert_path" 2>&1 | grep -q "is already enrolled"; then
-    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" \
-        "MOK is already enrolled. No further enrollment is required."
+if pkexec mokutil --test-key "$DER_CERT_PATH" 2>&1 | grep -q "is already enrolled"; then
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" \
+		"MOK is already enrolled. No further enrollment is required."
 else
-    notify-send -a "NX Secure Boot Manager" -i "preferences-system-login" \
-        "MOK is not enrolled. Enrolling the certificate now."
-    
-    enroll_password=$(pwgen -ys 6 1)
-    
-    kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.
+	notify-send -a "$TOOL_NAME" -i "preferences-system-login" \
+		"MOK is not enrolled. Enrolling the certificate now."
 
-    Password: \"$enroll_password\"
+	ENROLL_PASSWORD=$(pwgen -ys 6 1)
 
-    Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management."
+	kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.
 
-    echo "Please use the following password for MOK enrollment: \"$enroll_password\""
-    echo "Note: The mokutil input password prompt will not display characters as you type."
+	Password: \"$ENROLL_PASSWORD\"
 
-    pkexec mokutil --import "$der_cert_path"
+	Save it securely, as it is also required to remove the MOK from the Shim UEFI Key Management."
 
-    notify-send -a "NX Secure Boot Manager" -u critical -i "preferences-system-login" \
-        "MOK enrollment successful. Reboot now to approve MOK in MOKManager."
+	echo "Please use the following password for MOK enrollment: \"$ENROLL_PASSWORD\""
+	echo "Note: The mokutil input password prompt will not display characters as you type."
 
-    pkexec reboot
+	overlay_ch mokutil --import "$DER_CERT_PATH"
+
+	notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" \
+		"MOK enrollment successful. Reboot now to approve MOK in MOKManager."
+
+	pkexec reboot
 fi
+
+#   ====== END ======
