@@ -192,8 +192,7 @@ kdialog --msgbox "We generated a random password to enroll the MOK in mokutil an
 puts_info "Use the following password for MOK enrollment: $ENROLL_PASSWORD"
 puts_info "Note: The mokutil input password prompt will not display characters as you type."
 
-overlay_ch mount -t efivarfs efivarfs /sys/firmware/efi/efivars
-overlay_ch mokutil --import "$DER_CERT_PATH"
+mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
 
