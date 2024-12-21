@@ -102,6 +102,13 @@ trap cleanup EXIT
 
 # -- Variables.
 
+CURRENT_DIST=$(awk -F'=' '/VERSION_CODENAME/{print $NF}' /etc/os-release)
+TARGET_DIST="nitrux"
+
+SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
+
+OVERLAYROOT_CHROOT="/usr/sbin/overlayroot-chroot"
+
 MOK_CERT_DIR="/var/lib/shim-signed/mok"
 MOK_CERT_NAME="MOK-Kernel"
 MOK_SKEY_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.priv"
@@ -110,8 +117,10 @@ PEM_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.pem"
 
 CONFIGFILE="/etc/ssl/openssl-mok.cnf"
 
-CURRENT_DIST=$(awk -F'=' '/VERSION_CODENAME/{print $NF}' /etc/os-release)
-TARGET_DIST="nitrux"
+LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
+SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
+
+ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
 #   ====== START ======
 
@@ -127,6 +136,24 @@ else
 fi
 
 
+# -- Display welcome message.
+
+kdialog --msgbox \
+"<h1>Nitrux SB Manager</h1>
+<p><b>SB Manager</b> helps you sign kernels for Secure Boot with ease and efficiency.</p>
+<hr />
+<ul>
+  <li>Generate secure boot keys</li>
+  <li>Sign your kernel for Secure Boot</li>
+  <li>Enroll keys directly into the UEFI firmware</li>
+</ul>
+<hr />
+<p>Click Accept to begin configuring your system.</p>
+<p>Licensed under the BSD-3-Clause license — ©2024 Nitrux Latinoamericana S.C.</p>
+<p>Report issues at: <a href=\"https://github.com/Nitrux/nitrux-bug-tracker\">https://github.com/Nitrux/nitrux-bug-tracker</a></p>
+"
+
+
 # -- Check if using UEFI or Legacy.
 
 if [ ! -d /sys/firmware/efi ]; then
@@ -138,11 +165,15 @@ fi
 # -- Check Secure Boot status.
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Status Verification" "Checking Secure Boot status, please wait..."
-SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$SB_STATE" == "disabled" ]]; then
-	if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "$TOOL_NAME"; then
+	if ! kdialog --warningcontinuecancel "Secure Boot is not enabled in the UEFI.<br><br>Do you still want to sign a kernel?" --title "$TOOL_NAME"; then
 		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Kernel Signing Canceled" "If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
+		exit 0
+	fi
+else
+	if ! kdialog --yesno "Secure Boot is enabled in the UEFI.<br><br>Do you want to sign a kernel?" --title "$TOOL_NAME"; then
+		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Kernel Signing Canceled" "You chose not to sign the kernel."
 		exit 0
 	fi
 fi
@@ -150,8 +181,6 @@ fi
 
 # -- Check for the overlayroot-chroot executable and mounts using OverlayFS.
 # -- Quit if either of these checks fails since OverlayFS is assumed to be used.
-
-OVERLAYROOT_CHROOT="/usr/sbin/overlayroot-chroot"
 
 if [[ ! -f "$OVERLAYROOT_CHROOT" ]]; then
 	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i  "preferences-system-login" "Overlayroot Missing" "The executable $OVERLAYROOT_CHROOT was not found."
@@ -171,9 +200,9 @@ overlay_ch mount -t devtmpfs dev /dev
 
 # -- Prompt user for OpenSSL MOK configuration values using kdialog.
 
-CONFIGFILE="/etc/ssl/openssl-mok.cnf"
+kdialog --msgbox "In the next steps, you will be asked to enter specific details to generate an OpenSSL certificate for Secure Boot.<br><br>Please provide accurate information as it will be used to create a Machine Owner Key (MOK) for signing kernels and enrolling in the Shim UEFI Key Management system." --title "$TOOL_NAME"
 
-touch "$CONFIGFILE" && chmod 600 "$CONFIGFILE"
+pkexec bash -c "touch '$CONFIGFILE' && chmod 600 '$CONFIGFILE'"
 
 if [[ ! -f "$CONFIGFILE" ]]; then
     COUNTRYCODE=$(kdialog --inputbox "Enter country code:" "US" --title "$TOOL_NAME")
@@ -249,16 +278,31 @@ if ! overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib; then
 fi
 
 
-# -- Sign the latest kernel.
+# -- Allow the user to select a kernel to sign.
 
-LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2)
-SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
+mapfile -t KERNEL_FILES < <(find /boot -maxdepth 1 -name 'vmlinuz-*' -type f | sort)
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
+KERNEL_VERSIONS=()
+for kernel in "${KERNEL_FILES[@]}"; do
+    KERNEL_VERSIONS+=("$(basename "$kernel" | sed 's/vmlinuz-//')")
+done
 
-overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
+SELECTED_VERSION=$(kdialog --title "$TOOL_NAME" --combobox "Select the kernel version to sign:" "${KERNEL_VERSIONS[@]}")
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
+if [[ -z "$SELECTED_VERSION" ]]; then
+    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
+        "Task Canceled" "No kernel version selected for signing. Exiting."
+    exit 1
+fi
+
+SELECTED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION"
+SIGNED_KERNEL="/boot/vmlinuz-$SELECTED_VERSION.signed"
+
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing kernel version $SELECTED_VERSION with MOK, please wait..."
+
+overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$SELECTED_KERNEL"
+
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed kernel version $SELECTED_VERSION with MOK, continuing..."
 
 
 # -- Enroll the certificate in UEFI.
@@ -266,13 +310,9 @@ notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Succe
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Enrolling the MOK now, please wait..."
 
-ENROLL_PASSWORD=$(pwgen -0A 8 1)
+kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br><h2>Password: $ENROLL_PASSWORD</h2><br><br>Save it securely, as it is also required for removing the MOK.<br><br>The mokutil input password prompt will be displayed in the <strong><u>terminal window</u></strong>. However, it will not display characters as you type.<br><br>" --title "$TOOL_NAME"
 
-kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required for removing the MOK." --title "$TOOL_NAME"
-
-puts_info "Using generated password: $ENROLL_PASSWORD"
-puts_info "Note #1: The mokutil input password prompt will not display characters as you type."
-puts_info "Note #2: MokManager will require this password during the next boot for enrolling the MOK."
+puts_info "Use generated password: $ENROLL_PASSWORD"
 
 mokutil --import "$DER_CERT_PATH"
 
