@@ -105,21 +105,19 @@ PEM_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.pem"
 # -- Check if using UEFI or Legacy.
 
 if [ ! -d /sys/firmware/efi ]; then
-	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
-		"Legacy (BIOS) Mode Detected" "This tool requires the system to be booted in UEFI Mode."
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Legacy (BIOS) Mode Detected" "This tool requires the system to be booted in UEFI Mode."
 	exit 1
 fi
 
 
 # -- Check Secure Boot status.
 
-notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Checking Secure Boot status, please wait..."
+notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Status Verification" "Checking Secure Boot status, please wait..."
 SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 
 if [[ "$SB_STATE" == "disabled" ]]; then
 	if ! kdialog --yesno "Secure Boot is not enabled in the UEFI. Do you still want to sign the kernel?" --title "$TOOL_NAME"; then
-		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" \
-			"Kernel Signing Canceled" "If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
+		notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Kernel Signing Canceled" "If Secure Boot is later enabled, the system will be unbootable without signing the kernel."
 		exit 0
 	fi
 fi
