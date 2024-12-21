@@ -110,7 +110,7 @@ SB_STATE=$(mokutil --sb-state | grep -oP '(SecureBoot \K(enabled|disabled))')
 OVERLAYROOT_CHROOT="/usr/sbin/overlayroot-chroot"
 
 MOK_CERT_DIR="/var/lib/shim-signed/mok"
-MOK_CERT_NAME="MOK-Kernel"
+MOK_CERT_NAME="SB_MOK-Kernel"
 MOK_SKEY_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.priv"
 DER_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.der"
 PEM_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.pem"
