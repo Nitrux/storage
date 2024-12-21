@@ -93,14 +93,39 @@ overlay_ch() {
 	"${ROOT[@]}"
 }
 
+cleanup() {
+    overlay_ch umount /var/lib || true
+    overlay_ch umount /dev || true
+}
+trap cleanup EXIT
+
 
 # -- Variables.
 
-MOK_SKEY_PATH="/var/lib/shim-signed/mok/MOK-Kernel.priv"
-DER_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.der"
-PEM_CERT_PATH="/var/lib/shim-signed/mok/MOK-Kernel.pem"
+MOK_CERT_DIR="/var/lib/shim-signed/mok"
+MOK_CERT_NAME="MOK-Kernel"
+MOK_SKEY_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.priv"
+DER_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.der"
+PEM_CERT_PATH="$MOK_CERT_DIR/$MOK_CERT_NAME.pem"
+
+CONFIGFILE="/etc/ssl/openssl-mok.cnf"
+
+CURRENT_DIST=$(awk -F'=' '/VERSION_CODENAME/{print $NF}' /etc/os-release)
+TARGET_DIST="nitrux"
 
 #   ====== START ======
+
+
+# -- Ensure this utility runs in Nitrux and has an Internet connection.
+# -- Exit if the value is not 'nitrux'.
+
+if [[ "$CURRENT_DIST" == "$TARGET_DIST" ]]; then
+	puts_success "This utility is running in $(echo "$TARGET_DIST" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}'), continuing..."
+else
+	notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "$TOOL_NAME is intended to work exclusively in $(echo "$TARGET_DIST" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')." "Using this utility in $(echo "$CURRENT_DIST" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}') will break it and not work at all, quitting."
+	exit 1
+fi
+
 
 # -- Check if using UEFI or Legacy.
 
@@ -144,30 +169,84 @@ fi
 overlay_ch mount -t devtmpfs dev /dev
 
 
-# -- Check if the signing key and certificate files exist and rename the files.
+# -- Prompt user for OpenSSL MOK configuration values using kdialog.
+
+CONFIGFILE="/etc/ssl/openssl-mok.cnf"
+
+touch "$CONFIGFILE" && chmod 600 "$CONFIGFILE"
+
+if [[ ! -f "$CONFIGFILE" ]]; then
+    COUNTRYCODE=$(kdialog --inputbox "Enter country code:" "US" --title "$TOOL_NAME")
+    STATE=$(kdialog --inputbox "Enter state or province:" "State" --title "$TOOL_NAME")
+    CITY=$(kdialog --inputbox "Enter city or locality:" "City" --title "$TOOL_NAME")
+    ORG=$(kdialog --inputbox "Enter organization name:" "Organization" --title "$TOOL_NAME")
+    EMAIL=$(kdialog --inputbox "Enter email address:" "user@example.com" --title "$TOOL_NAME")
+
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Generating OpenSSL configuration file for Secure Boot, please wait..."
+
+    cat > "$CONFIGFILE" <<EOF
+HOME                    = .
+RANDFILE                = \$ENV::HOME/.rnd
+[ req ]
+distinguished_name      = req_distinguished_name
+x509_extensions         = v3
+string_mask             = utf8only
+prompt                  = no
+[ req_distinguished_name ]
+countryName             = "$COUNTRYCODE"
+stateOrProvinceName     = "$STATE"
+localityName            = "$CITY"
+organizationName        = "$ORG"
+commonName              = "Secure Boot Signing Key"
+emailAddress            = "$EMAIL"
+[ v3 ]
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always,issuer
+basicConstraints        = critical,CA:FALSE
+extendedKeyUsage        = codeSigning,1.3.6.1.4.1.2312.16.1.3
+nsComment               = "OpenSSL Generated Certificate"
+EOF
+
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated OpenSSL configuration file. Continuing..."
+fi
+
+
+# -- Generate MOK files.
 
 if [[ ! -f "$MOK_SKEY_PATH" || ! -f "$PEM_CERT_PATH" ]]; then
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Generating new MOK for Secure Boot, please wait..."
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Generating new MOK for Secure Boot, please wait..."
 
-	pkexec bash -c "
-			rm -r /var/lib/shim-signed/mok/*
-			update-secureboot-policy --new-key
-			for ext in der priv; do
-				mv \"/var/lib/shim-signed/mok/MOK.\$ext\" \"/var/lib/shim-signed/mok/MOK-Kernel.\$ext\"
-			done
-			openssl x509 -inform der -in \"$DER_CERT_PATH\" -out \"$PEM_CERT_PATH\"
-		"
+    pkexec bash -c "
+        [[ ! -d \"$MOK_CERT_DIR\" ]] && mkdir -p \"$MOK_CERT_DIR\"
 
-	notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated MOK, continuing..."
+        openssl req -config \"$CONFIGFILE\" \
+            -new -x509 -newkey rsa:2048 \
+            -nodes -days 36500 -outform DER \
+            -keyout \"$MOK_SKEY_PATH\" \
+            -out \"$DER_CERT_PATH\"
+
+        openssl x509 -inform der -in \"$DER_CERT_PATH\" \
+            -out \"$PEM_CERT_PATH\"
+
+        chmod 600 \"$MOK_SKEY_PATH\" \"$PEM_CERT_PATH\"
+    "
+
+    notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully generated MOK, continuing..."
 fi
 
 
 # -- Mount NX_VAR_LIB partition.
-# -- We need to mount this partition because sbsign needs to run in the lower directory and /var/lib is not accessible there.
+# -- Ensure that the partition exists and is mountable.
 
-VAR_LIB_PARTITION=$(findfs LABEL=NX_VAR_LIB)
+if ! VAR_LIB_PARTITION=$(findfs LABEL=NX_VAR_LIB); then
+    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Partition Not Found" "The NX_VAR_LIB partition could not be found. Ensure the partition exists and try again."
+    exit 1
+fi
 
-overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib
+if ! overlay_ch mount -t auto "$VAR_LIB_PARTITION" /var/lib; then
+    notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Mount Failed" "Failed to mount the NX_VAR_LIB partition. Ensure it is accessible and try again."
+    exit 1
+fi
 
 
 # -- Sign the latest kernel.
@@ -176,7 +255,9 @@ LATEST_KERNEL=$(find /boot -maxdepth 1 -name 'vmlinuz*' -type f -printf '%T@ %p\
 SIGNED_KERNEL="/boot/$(basename "$LATEST_KERNEL")"
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Signing $LATEST_KERNEL with MOK, please wait..."
+
 overlay_ch sbsign --key "$MOK_SKEY_PATH" --cert "$PEM_CERT_PATH" --output "$SIGNED_KERNEL" "$LATEST_KERNEL"
+
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Successfully signed $LATEST_KERNEL with MOK, continuing..."
 
 
@@ -189,15 +270,15 @@ ENROLL_PASSWORD=$(pwgen -0A 8 1)
 
 kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br>Password: $ENROLL_PASSWORD<br><br>Save it securely, as it is also required for removing the MOK." --title "$TOOL_NAME"
 
-puts_info "Use the following password for MOK enrollment: $ENROLL_PASSWORD"
-puts_info "Note: The mokutil input password prompt will not display characters as you type."
+puts_info "Using generated password: $ENROLL_PASSWORD"
+puts_info "Note #1: The mokutil input password prompt will not display characters as you type."
+puts_info "Note #2: MokManager will require this password during the next boot for enrolling the MOK."
 
 mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical --action=Understood -i "preferences-system-login" "Task Complete" "Reboot now to approve the enrolled MOK in MOKManager."
 
-overlay_ch umount /var/lib
-overlay_ch umount /dev
+cleanup
 
 
 #   ====== END ======
