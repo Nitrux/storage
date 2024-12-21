@@ -194,7 +194,7 @@ overlay_ch mount -t devtmpfs dev /dev
 
 # -- Prompt user for OpenSSL MOK configuration values using kdialog.
 
-kdialog --msgbox "In the next steps, you will be asked to enter specific details to generate an OpenSSL certificate for Secure Boot.<br><br>Please provide accurate information as it will be used to create a Machine Owner Key (MOK) for signing kernels and enrolling in the Shim UEFI Key Management system." --title "$TOOL_NAME"
+kdialog --msgbox "In the following steps, you must enter specific details to generate an OpenSSL certificate for Secure Boot.<br><br>Please provide accurate information as OpenSSL will use them to create a Machine Owner Key (MOK) for signing kernels and enrolling in the Shim UEFI Key Management system." --title "$TOOL_NAME"
 
 if [[ ! -f "$CONFIGFILE" ]]; then
     COUNTRYCODE=$(kdialog --inputbox "Enter country code:" "US" --title "$TOOL_NAME")
@@ -303,7 +303,7 @@ notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Task Complete" "Succe
 
 notify-send -a "$TOOL_NAME" -i "preferences-system-login" "Preparing Task" "Enrolling the MOK now, please wait..."
 
-kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br><h2>Password: $ENROLL_PASSWORD</h2><br><br>Save it securely, as it is also required for removing the MOK.<br><br>The mokutil input password prompt will be displayed in the <strong><u>terminal window</u></strong>. However, it will not display characters as you type.<br><br>" --title "$TOOL_NAME"
+kdialog --msgbox "We generated a random password to enroll the MOK in mokutil and the Shim UEFI Key Management on reboot.<br><br><h2>Password: $ENROLL_PASSWORD</h2><br><br>Save it securely, as it is also required for removing the MOK.<br><br>The mokutil input password prompt will be displayed in the <strong><u>terminal window</u></strong>. However, it will not display characters as you type." --title "$TOOL_NAME"
 
 puts_info "Use generated password: $ENROLL_PASSWORD"
 
@@ -311,6 +311,6 @@ pkexec mokutil --import "$DER_CERT_PATH"
 
 notify-send -a "$TOOL_NAME" -u critical -i "preferences-system-login" "All Tasks Completed" "$TOOL_NAME succesfully completed all its tasks."
 
-kdialog --msgbox "Reboot now to approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager)."
+kdialog --msgbox "Reboot and approve the enrolled MOK in the Shim UEFI Key Management system (MOKManager).<br>After approving the MOK enrollment, enable Secure Boot in the UEFI (if necessary) and boot $CURRENT_DIST."
 
 #   ====== END ======
