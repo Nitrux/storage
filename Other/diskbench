@@ -126,7 +126,7 @@ output_results() {
 get_disk_interface() {
     local interface
     interface=$(lsblk -ndo TRAN "$DISK_DEVICE" 2>/dev/null | xargs || \
-            udevadm info --query=property --name="$DISK_DEVICE" | grep -oP 'ID_BUS=\K\w+' || echo "unknown")
+               udevadm info --query=property --name="$DISK_DEVICE" 2>/dev/null | grep -oP 'ID_BUS=\K\w+' || echo "unknown")
     DISK_INTERFACE=${interface:-Unknown}
 }
 
@@ -134,21 +134,21 @@ get_disk_info() {
     local model capacity dom
 
     if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
-        model=$(smartctl -i "$DISK_DEVICE" | grep "Model Number" | awk -F: '{print $2}' | xargs || true)
-        dom=$(smartctl -i "$DISK_DEVICE" | grep "Firmware Version" | awk -F: '{print $2}' | xargs || true)
+        model=$(smartctl -i "$DISK_DEVICE" | grep -i "Model Number" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep -i "Firmware Version" | awk -F: '{print $2}' | xargs || true)
     else
-        model=$(smartctl -i "$DISK_DEVICE" | grep "Device Model" | awk -F: '{print $2}' | xargs || true)
-        dom=$(smartctl -i "$DISK_DEVICE" | grep "Manufactured" | awk -F: '{print $2}' | xargs || true)
+        model=$(smartctl -i "$DISK_DEVICE" | grep -i "Device Model" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep -i "Manufactured" | awk -F: '{print $2}' | xargs || true)
     fi
 
     if [[ -z "$model" ]]; then
-        model=$(lsblk -no MODEL "$DISK_DEVICE" | head -n 1 | xargs)
+        model=$(lsblk -no MODEL "$DISK_DEVICE" | head -n 1 | xargs || echo "Unknown")
     fi
     if [[ -z "$dom" ]]; then
         dom="Unknown (USB-connected or unreported)"
     fi
 
-    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE" | xargs)
+    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE" | xargs || echo "Unknown")
 
     DISK_MODEL=${model:-Unknown}
     DISK_CAPACITY=${capacity:-Unknown}
@@ -179,11 +179,15 @@ get_disk_health() {
 }
 
 get_disk_temperature() {
-    local temperature
+    local temperature=""
 
-    temperature=$(smartctl -A "$DISK_DEVICE" | grep -i "Temperature:" | head -n 1 | awk '{print $2}' || true)
+    if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
+        temperature=$(smartctl -A "$DISK_DEVICE" | grep -i "Temperature:" | awk '{print $2}' | head -n 1 || echo "Unknown")
+    else
+        temperature=$(smartctl -A "$DISK_DEVICE" | grep -Ei 'Temperature_Celsius|Airflow_Temperature_Cel' | awk '{print $10}' | head -n 1 || echo "Unknown")
+    fi
 
-    if [[ -n "$temperature" ]]; then
+    if [[ -n "$temperature" && "$temperature" != "Unknown" ]]; then
         DISK_TEMPERATURE="${temperature}"
     else
         DISK_TEMPERATURE="Unknown"
@@ -192,13 +196,25 @@ get_disk_temperature() {
 
 get_disk_power_cycles() {
     local power_cycles
-    power_cycles=$(smartctl -A "$DISK_DEVICE" | grep -i "Power Cycles" | awk -F: '{print $2}' | xargs || echo "Unknown")
+
+    if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
+        power_cycles=$(smartctl -A "$DISK_DEVICE" | grep -i "Power Cycles:" | awk '{print $3}' || echo "Unknown")
+    else
+        power_cycles=$(smartctl -A "$DISK_DEVICE" | grep -i "Power_Cycle_Count" | awk '{print $10}' || echo "Unknown")
+    fi
+
     DISK_POWER_CYCLES=${power_cycles:-Unknown}
 }
 
 get_disk_power_on_hours() {
     local power_on_hours
-    power_on_hours=$(smartctl -A "$DISK_DEVICE" | grep -i "Power On Hours" | awk -F: '{print $2}' | xargs || echo "Unknown")
+
+    if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
+        power_on_hours=$(smartctl -A "$DISK_DEVICE" | grep -i "Power On Hours:" | awk '{print $4}' || echo "Unknown")
+    else
+        power_on_hours=$(smartctl -A "$DISK_DEVICE" | grep -i "Power_On_Hours_and_Msec" | awk '{print $10}' || echo "Unknown")
+    fi
+
     DISK_POWER_ON_HOURS=${power_on_hours:-Unknown}
 }
 
@@ -320,6 +336,7 @@ SEQ_WRITE_RESULT=$(fio --name=seq_write_test --eta-newline=5s --filename="$TEST_
 --rw=write --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
 output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT//,/}"
+output_results ""
 
 
 # -- Measure sequential read speed with big blocks (QD32).
@@ -330,6 +347,7 @@ SEQ_READ_RESULT=$(fio --name=seq_read_test --eta-newline=5s --filename="$TEST_DI
 --rw=read --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
 output_results "Sequential Read (QD32): ${SEQ_READ_RESULT//,/}"
+output_results ""
 
 
 # -- Measure random 4K write speed (QD1).
@@ -340,6 +358,7 @@ RAND_WRITE_RESULT=$(fio --name=rand_write_test --eta-newline=5s --filename="$TES
 --rw=randwrite --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
 output_results "Random 4K Write (QD1): ${RAND_WRITE_RESULT//,/}\n"
+output_results ""
 
 
 # -- Measure random 4K read speed (QD1).
@@ -350,6 +369,7 @@ RAND_READ_RESULT=$(fio --name=rand_read_test --eta-newline=5s --filename="$TEST_
 --rw=randread --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
 output_results "Random 4K Read (QD1): ${RAND_READ_RESULT//,/}"
+output_results ""
 
 
 # -- Measure mixed random 4K read/write speed (QD1).
@@ -364,6 +384,7 @@ MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep "read:" | awk -F'IOPS=' '{pr
 MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep "write:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 
 output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS//,/} | Write IOPS: ${MIXED_RW_WRITE_IOPS//,/}"
+output_results ""
 
 
 # -- Measure latency with ioping.
@@ -372,6 +393,7 @@ clear_caches
 output_results "Measuring disk latency..."
 LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk -F'[=/]' '{print $5}' || echo "Unknown")
 output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}\n"
+output_results ""
 
 
 # -- Cleanup.
