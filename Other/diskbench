@@ -160,7 +160,7 @@ get_disk_temperature() {
     temperature=$(smartctl -A "$DISK_DEVICE" | grep -i "Temperature:" | head -n 1 | awk '{print $2}' || true)
 
     if [[ -n "$temperature" ]]; then
-        DISK_TEMPERATURE="${temperature}°C"
+        DISK_TEMPERATURE="${temperature}"
     else
         DISK_TEMPERATURE="Unknown"
     fi
