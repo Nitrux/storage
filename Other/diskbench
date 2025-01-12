@@ -84,10 +84,10 @@ puts_warning() {
 }
 
 
-# -- Check if script is run with sudo.
+# -- Check if utility is run with sudo.
 
 if [[ $EUID -ne 0 ]]; then
-    echo "This script must be run as root. Use sudo to execute it."
+    echo "This utility must be run as root. Use sudo to execute it."
     exit 1
 fi
 
@@ -237,28 +237,56 @@ get_disk_info
 
 output_results "| $TOOL_NAME v$TOOL_VERSION."
 output_results "| (c) $FECHA Some Rights Reserved."
-output_results "| Made by $VENDOR."
+output_results "| Made by $VENDOR"
 output_results ""
 output_results "Disk Model:           ${DISK_MODEL:-Unknown}"
 output_results "Date of Manufacture:  ${DISK_DOM:-Unknown}"
-output_results "Capacity:            ${DISK_CAPACITY:-Unknown}"
+output_results "Capacity:             ${DISK_CAPACITY:-Unknown}"
 output_results ""
 
 
-# -- Measure write speed.
+# -- Measure sequential write speed with big blocks (QD32).
 
 clear_caches
-output_results "Measuring write speed..."
-WRITE_RESULT=$(fio --name=write_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=write --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Disk Write:           ${WRITE_RESULT:-Unknown}\n"
+output_results "Measuring sequential write speed with big blocks (QD32)..."
+SEQ_WRITE_RESULT=$(fio --name=seq_write_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
+--rw=write --size=500m --io_size=10g --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
+--direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
+output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}\n"
 
 
-# -- Measure read speed.
+# -- Measure sequential read speed with big blocks (QD32).
 
 clear_caches
-output_results "Measuring read speed..."
-READ_RESULT=$(fio --name=read_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=read --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Disk Read:            ${READ_RESULT:-Unknown}\n"
+output_results "Measuring sequential read speed with big blocks (QD32)..."
+SEQ_READ_RESULT=$(fio --name=seq_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
+--rw=read --size=500m --io_size=10g --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
+--direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
+output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}\n"
+
+
+# -- Measure random 4K read speed (QD1).
+
+clear_caches
+output_results "Measuring random 4K read speed (QD1)..."
+RAND_READ_RESULT=$(fio --name=rand_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
+--rw=randread --size=500m --io_size=10g --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
+--direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
+output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}\n"
+
+
+# -- Measure mixed random 4K read/write speed (QD1).
+
+clear_caches
+output_results "Measuring mixed random 4K read/write speed (QD1)..."
+MIXED_RW_RESULT=$(fio --name=mixed_rw_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
+--rw=randrw --size=500m --io_size=10g --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
+--direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "IOPS=")
+
+MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep -oP '(?<=r=)[^,]+')
+MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep -oP '(?<=w=)[^,]+')
+
+output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown}, Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}\n"
 
 
 # -- Measure latency with ioping.
