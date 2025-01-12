@@ -171,8 +171,13 @@ get_disk_info
 
 # -- Write header to results file or console.
 
-output_results "$TOOL_NAME v$TOOL_VERSION\n(c) $FECHA Some Rights Reserved. Made by $VENDOR\n"
-output_results "Disk Model: ${DISK_MODEL}\nDate of Manufacture: ${DISK_DOM}\nCapacity: ${DISK_CAPACITY}\n"
+output_results "| $TOOL_NAME v$TOOL_VERSION."
+output_results "| (c) $FECHA Some Rights Reserved."
+output_results "| Made by $VENDOR."
+output_results ""
+output_results "Disk Model:           ${DISK_MODEL:-Unknown}"
+output_results "Date of Manufacture:  ${DISK_DOM:-Unknown}"
+output_results "Capacity:            ${DISK_CAPACITY:-Unknown}"
 output_results ""
 
 
@@ -181,14 +186,15 @@ output_results ""
 clear_caches
 output_results "Measuring write speed..."
 WRITE_RESULT=$(fio --name=write_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=write --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Disk Write: ${WRITE_RESULT:-Unknown}\n"
+output_results "Disk Write:           ${WRITE_RESULT:-Unknown}\n"
+
 
 # -- Measure read speed.
 
 clear_caches
 output_results "Measuring read speed..."
 READ_RESULT=$(fio --name=read_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=read --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Disk Read: ${READ_RESULT:-Unknown}\n"
+output_results "Disk Read:            ${READ_RESULT:-Unknown}\n"
 
 
 # -- Measure latency with ioping.
@@ -196,13 +202,12 @@ output_results "Disk Read: ${READ_RESULT:-Unknown}\n"
 clear_caches
 output_results "Measuring disk latency..."
 LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk '{print $4}')
-output_results "Disk Latency: ${LATENCY_RESULT:-Unknown}\n"
+output_results "Disk Latency:         ${LATENCY_RESULT:-Unknown}\n"
 
 
 # -- Cleanup.
 
 rm -f "$TEST_DIR/disk_test_file"
-output_results "The temporary test file was removed."
 
 if [[ -n "$RESULT_FILE" ]]; then
     echo "Benchmark results saved in $RESULT_FILE"
