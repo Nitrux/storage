@@ -94,9 +94,9 @@ fi
 
 # -- Display an error when no flag is used.
 
-error () {
-  puts_error "$TOOL_SHRT_NAME: \e[31mError:\e[0m: $*" >&2
-  exit 1
+error() {
+    puts_error "$*"
+    exit 1
 }
 
 
@@ -123,6 +123,13 @@ output_results() {
     fi
 }
 
+get_disk_interface() {
+    local interface
+    interface=$(lsblk -ndo TRAN "$DISK_DEVICE" 2>/dev/null | xargs || \
+            udevadm info --query=property --name="$DISK_DEVICE" | grep -oP 'ID_BUS=\K\w+' || echo "unknown")
+    DISK_INTERFACE=${interface:-Unknown}
+}
+
 get_disk_info() {
     local model capacity dom
 
@@ -146,6 +153,23 @@ get_disk_info() {
     DISK_MODEL=${model:-Unknown}
     DISK_CAPACITY=${capacity:-Unknown}
     DISK_DOM=${dom:-Unknown}
+
+    get_disk_interface
+
+    case "$DISK_INTERFACE" in
+        "nvme")
+            IO_SIZE="10g"
+            ;;
+        "sata"|"ata")
+            IO_SIZE="5g"
+            ;;
+        "usb")
+            IO_SIZE="2g"
+            ;;
+        *)
+            IO_SIZE="1g"
+            ;;
+    esac
 }
 
 get_disk_health() {
@@ -255,6 +279,14 @@ if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
 fi
 
 
+# -- Prevent multiple benchmarks on same device.
+
+if [[ -f "$TEST_DIR/disk_test_file" ]]; then
+    puts_error "Temporary test file already exists. Please remove it manually to proceed."
+    exit 1
+fi
+
+
 # -- Fetch disk details.
 
 get_disk_info
@@ -285,7 +317,7 @@ output_results ""
 clear_caches
 output_results "Measuring sequential write speed with big blocks (QD32)..."
 SEQ_WRITE_RESULT=$(fio --name=seq_write_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
---rw=write --size=500m --io_size=10g --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
+--rw=write --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
 output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}\n"
 
@@ -295,7 +327,7 @@ output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}\n"
 clear_caches
 output_results "Measuring sequential read speed with big blocks (QD32)..."
 SEQ_READ_RESULT=$(fio --name=seq_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
---rw=read --size=500m --io_size=10g --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
+--rw=read --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
 output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}\n"
 
@@ -305,7 +337,7 @@ output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}\n"
 clear_caches
 output_results "Measuring random 4K read speed (QD1)..."
 RAND_READ_RESULT=$(fio --name=rand_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
---rw=randread --size=500m --io_size=10g --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
+--rw=randread --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
 output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}\n"
 
@@ -315,7 +347,7 @@ output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}\n"
 clear_caches
 output_results "Measuring mixed random 4K read/write speed (QD1)..."
 MIXED_RW_RESULT=$(fio --name=mixed_rw_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
---rw=randrw --size=500m --io_size=10g --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
+--rw=randrw --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep -E "(read:|write:)")
 
 MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep "read:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
@@ -328,18 +360,29 @@ output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unkno
 
 clear_caches
 output_results "Measuring disk latency..."
-LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk -F'[=/]' '{print $5}')
+LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk -F'[=/]' '{print $5}' || echo "Unknown")
 output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}\n"
 
 
 # -- Cleanup.
 
 rm -f "$TEST_DIR/disk_test_file"
-output_results "⚠ Important: No file specified for saving benchmark results."
+
+if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
+    puts_error "The specified results file directory is not writable: $RESULT_FILE"
+    exit 1
+fi
+
+if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
+    puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
+    exit 1
+fi
 
 if [[ -n "$RESULT_FILE" ]]; then
-    echo "Benchmark results saved to: $RESULT_FILE"
+    puts_success "Benchmark results saved to: $RESULT_FILE"
     cat "$RESULT_FILE"
+else
+    output_results "⚠ Important: No file specified for saving benchmark results."
 fi
 
 clear_caches
