@@ -299,7 +299,7 @@ get_disk_power_on_hours
 # -- Write header to results file or console.
 
 output_results "| $TOOL_NAME version: $TOOL_SHRT_NAME-$TOOL_VERSION."
-output_results "| The license used for this file and its contents is: BSD-3-Clause."
+output_results "| The license used for this file and its contents is BSD-3-Clause."
 output_results "| (c) $FECHA Some Rights Reserved. Made by $VENDOR"
 output_results ""
 output_results "Disk Model:           ${DISK_MODEL:-Unknown}"
@@ -319,7 +319,7 @@ output_results "Measuring sequential write speed with big blocks (QD32)..."
 SEQ_WRITE_RESULT=$(fio --name=seq_write_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=write --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}\n"
+output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}"
 
 
 # -- Measure sequential read speed with big blocks (QD32).
@@ -329,7 +329,7 @@ output_results "Measuring sequential read speed with big blocks (QD32)..."
 SEQ_READ_RESULT=$(fio --name=seq_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=read --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}\n"
+output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}"
 
 
 # -- Measure random 4K read speed (QD1).
@@ -339,7 +339,7 @@ output_results "Measuring random 4K read speed (QD1)..."
 RAND_READ_RESULT=$(fio --name=rand_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=randread --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}\n"
+output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}"
 
 
 # -- Measure mixed random 4K read/write speed (QD1).
@@ -353,7 +353,7 @@ MIXED_RW_RESULT=$(fio --name=mixed_rw_test --eta-newline=5s --filename="$TEST_DI
 MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep "read:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep "write:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 
-output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown}, Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}\n"
+output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown} | Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}"
 
 
 # -- Measure latency with ioping.
@@ -382,7 +382,7 @@ if [[ -n "$RESULT_FILE" ]]; then
     puts_success "Benchmark results saved to: $RESULT_FILE"
     cat "$RESULT_FILE"
 else
-    output_results "⚠ Important: No file specified for saving benchmark results."
+    output_results "⚠ Important: No file is specified for saving benchmark results."
 fi
 
 clear_caches
