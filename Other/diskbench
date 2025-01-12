@@ -357,7 +357,7 @@ output_results "Measuring random 4K write speed (QD1)..."
 RAND_WRITE_RESULT=$(fio --name=rand_write_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=randwrite --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Random 4K Write (QD1): ${RAND_WRITE_RESULT//,/}\n"
+output_results "Random 4K Write (QD1): ${RAND_WRITE_RESULT//,/}"
 output_results ""
 
 
