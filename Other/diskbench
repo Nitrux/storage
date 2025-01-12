@@ -141,7 +141,7 @@ get_disk_info() {
         dom="Unknown (USB-connected or unreported)"
     fi
 
-    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
+    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE" | xargs)
 
     DISK_MODEL=${model:-Unknown}
     DISK_CAPACITY=${capacity:-Unknown}
