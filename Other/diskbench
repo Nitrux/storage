@@ -333,8 +333,6 @@ output_results "Power Cycles:         ${DISK_POWER_CYCLES:-Unknown}"
 output_results "Power On Hours:       ${DISK_POWER_ON_HOURS:-Unknown} hours"
 output_results ""
 
-exit 1
-
 
 # -- Measure sequential write speed with big blocks (QD32).
 
