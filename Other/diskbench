@@ -164,17 +164,17 @@ get_disk_info() {
             IO_SIZE="5g"
             ;;
         "usb")
-            IO_SIZE="1g"
+            IO_SIZE="500m"
             ;;
         *)
-            IO_SIZE="500m"
+            IO_SIZE="250m"
             ;;
     esac
 }
 
 get_disk_health() {
     local health_status
-    health_status=$(smartctl -H "$DISK_DEVICE" | grep -i "SMART overall-health" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    health_status=$(smartctl -H "$DISK_DEVICE" 2>/dev/null | grep -i "SMART overall-health" | awk -F: '{print $2}' | xargs || echo "Unknown")
     DISK_HEALTH=${health_status:-Unknown}
 }
 
@@ -192,13 +192,13 @@ get_disk_temperature() {
 
 get_disk_power_cycles() {
     local power_cycles
-    power_cycles=$(smartctl -A "$DISK_DEVICE" | grep -i "Power Cycles" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    power_cycles=$(smartctl -A "$DISK_DEVICE" 2>/dev/null | grep -i "Power Cycles" | awk -F: '{print $2}' | xargs || echo "Unknown")
     DISK_POWER_CYCLES=${power_cycles:-Unknown}
 }
 
 get_disk_power_on_hours() {
     local power_on_hours
-    power_on_hours=$(smartctl -A "$DISK_DEVICE" | grep -i "Power On Hours" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    power_on_hours=$(smartctl -A "$DISK_DEVICE" 2>/dev/null | grep -i "Power On Hours" | awk -F: '{print $2}' | xargs || echo "Unknown")
     DISK_POWER_ON_HOURS=${power_on_hours:-Unknown}
 }
 
@@ -319,7 +319,7 @@ output_results "Measuring sequential write speed with big blocks (QD32)..."
 SEQ_WRITE_RESULT=$(fio --name=seq_write_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=write --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}"
+output_results "Sequential Write (QD32): ${SEQ_WRITE_RESULT:-Unknown}\n"
 
 
 # -- Measure sequential read speed with big blocks (QD32).
@@ -329,7 +329,7 @@ output_results "Measuring sequential read speed with big blocks (QD32)..."
 SEQ_READ_RESULT=$(fio --name=seq_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=read --size=500m --io_size="$IO_SIZE" --blocksize=1024k --ioengine=libaio --fsync=10000 --iodepth=32 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}"
+output_results "Sequential Read (QD32): ${SEQ_READ_RESULT:-Unknown}\n"
 
 
 # -- Measure random 4K read speed (QD1).
@@ -339,7 +339,7 @@ output_results "Measuring random 4K read speed (QD1)..."
 RAND_READ_RESULT=$(fio --name=rand_read_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=randread --size=500m --io_size="$IO_SIZE" --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
 --direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}"
+output_results "Random 4K Read (QD1): ${RAND_READ_RESULT:-Unknown}\n"
 
 
 # -- Measure mixed random 4K read/write speed (QD1).
@@ -353,7 +353,7 @@ MIXED_RW_RESULT=$(fio --name=mixed_rw_test --eta-newline=5s --filename="$TEST_DI
 MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep "read:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep "write:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 
-output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown} | Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}"
+output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown} | Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}\n"
 
 
 # -- Measure latency with ioping.
