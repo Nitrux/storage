@@ -25,15 +25,63 @@
 
 # -- Exit on errors.
 
-set -xeuo pipefail
+set -euo pipefail
 
 
 # -- Set program name and version.
 
 TOOL_NAME="Nitrux Disk Benchmark"
+TOOL_SHRT_NAME="diskbench"
 TOOL_VERSION="$(md5sum "$0" | cut -c -32)"
 VENDOR='Nitrux Latinoamericana S.C.'
 FECHA=$(date +%Y)
+
+
+# -- Print informative messages to stderr.
+
+puts_info() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[34mInfo:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print success messages to stderr.
+
+puts_success() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[32mSuccess:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print error messages to stderr.
+
+puts_error() {
+	if [ -n "$1" ]; then
+		printf "%s: \e[31mError:\e[0m %b\n" "$TOOL_NAME" "$*" >&2
+	fi
+}
+
+
+# -- Print messages or text using multiple lines to stderr.
+
+print_message() {
+	if [ $# -eq 0 ]; then
+		printf "\n" >&2
+	else
+		printf "%s\n" "$@" >&2
+	fi
+}
+
+
+# -- Print warning messages to stderr.
+
+puts_warning() {
+    if [ -n "$1" ]; then
+        printf "%s: \e[33mWarning:\e[0m %s\n" "$TOOL_NAME" "$*" >&2
+    fi
+}
 
 
 # -- Check if script is run with sudo.
@@ -44,10 +92,18 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 
+# -- Display an error when no flag is used.
+
+error () {
+  puts_error "$TOOL_SHRT_NAME: \e[31mError:\e[0m: $*" >&2
+  exit 1
+}
+
+
 # -- Ensure necessary tools are installed.
 
 if ! command -v fio &>/dev/null || ! command -v ioping &>/dev/null || ! command -v smartctl &>/dev/null; then
-    echo "Please install 'fio', 'ioping', and 'smartmontools' first!"
+    puts_error "Please install 'fio', 'ioping', and 'smartmontools' first!"
     exit 1
 fi
 
@@ -81,8 +137,8 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         *)
-            echo "Unknown argument: $1"
-            echo "Usage: $0 --disk /dev/sdX [--partition /dev/sdX1] --test-dir /path/to/dir [--results output_file.txt]"
+            puts_error "Unknown argument: $1"
+            puts_info "Usage: $0 --disk /dev/sdX [--partition /dev/sdX1] --test-dir /path/to/dir [--results output_file.txt]"
             exit 1
             ;;
     esac
@@ -92,19 +148,19 @@ done
 # -- Validate arguments.
 
 if [[ -z "$DISK_DEVICE" ]]; then
-    echo "Error: Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
+    puts_error "Error: Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
     exit 1
 fi
 
 if [[ -z "$TEST_DIR" ]]; then
-    echo "Error: Test directory is not specified. Use --test-dir to specify a directory on the target device."
+    puts_error "Error: Test directory is not specified. Use --test-dir to specify a directory on the target device."
     exit 1
 fi
 
 if [[ -z "$PARTITION" ]]; then
     PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | grep -E "^${DISK_DEVICE}[a-z0-9]*$")
     if [[ -z "$PARTITION" ]]; then
-        echo "Error: No partition found on $DISK_DEVICE. Specify a partition using --partition."
+        puts_error "Error: No partition found on $DISK_DEVICE. Specify a partition using --partition."
         exit 1
     fi
 fi
@@ -114,15 +170,15 @@ fi
 
 TEST_DIR_DEVICE=$(findmnt -n -o SOURCE "$TEST_DIR" 2>/dev/null || echo "NotFound")
 if [[ "$TEST_DIR_DEVICE" == "NotFound" ]]; then
-    echo "Error: Could not determine the source device for $TEST_DIR. Is it properly mounted?"
+    puts_error "Error: Could not determine the source device for $TEST_DIR. Is it properly mounted?"
     exit 1
 fi
 
 TEST_DIR_DEVICE=${TEST_DIR_DEVICE//\[*\]/}
 
 if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
-    echo "Error: Test directory $TEST_DIR is not on the specified partition $PARTITION."
-    echo "Found: $TEST_DIR_DEVICE"
+    puts_error "Error: Test directory $TEST_DIR is not on the specified partition $PARTITION."
+    puts_info "Found: $TEST_DIR_DEVICE"
     exit 1
 fi
 
@@ -137,7 +193,7 @@ clear_caches() {
 
 output_results() {
     if [[ -n "$RESULT_FILE" ]]; then
-        echo "$1" >> "$RESULT_FILE"
+        puts_info "$1" >> "$RESULT_FILE"
     else
         echo -e "$1"
     fi
@@ -216,9 +272,10 @@ output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}\n"
 # -- Cleanup.
 
 rm -f "$TEST_DIR/disk_test_file"
+output_results "⚠ Important: No file specified for saving benchmark results."
 
 if [[ -n "$RESULT_FILE" ]]; then
-    echo "Benchmark results saved in $RESULT_FILE"
+    echo "Benchmark results saved to: $RESULT_FILE"
     cat "$RESULT_FILE"
 fi
 
