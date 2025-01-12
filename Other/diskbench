@@ -25,7 +25,7 @@
 
 # -- Exit on errors.
 
-set -euo pipefail
+set -xeuo pipefail
 
 
 # -- Set program name and version.
@@ -148,15 +148,23 @@ output_results() {
 
 get_disk_info() {
     local model capacity dom
+
     if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
-        model=$(sudo smartctl -i "$DISK_DEVICE" | grep "Model Number" | awk -F: '{print $2}' | xargs)
-        capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
-        dom=$(sudo smartctl -i "$DISK_DEVICE" | grep "Firmware Version" | awk -F: '{print $2}' | xargs)
+        model=$(smartctl -i "$DISK_DEVICE" | grep "Model Number" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep "Firmware Version" | awk -F: '{print $2}' | xargs || true)
     else
-        model=$(sudo smartctl -i "$DISK_DEVICE" | grep "Device Model" | awk -F: '{print $2}' | xargs)
-        capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
-        dom=$(sudo smartctl -i "$DISK_DEVICE" | grep "Manufactured" | awk -F: '{print $2}' | xargs)
+        model=$(smartctl -i "$DISK_DEVICE" | grep "Device Model" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep "Manufactured" | awk -F: '{print $2}' | xargs || true)
     fi
+
+    if [[ -z "$model" ]]; then
+        model=$(lsblk -no MODEL "$DISK_DEVICE" | head -n 1 | xargs)
+    fi
+    if [[ -z "$dom" ]]; then
+        dom="Unknown (USB-connected or unreported)"
+    fi
+
+    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
 
     DISK_MODEL=${model:-Unknown}
     DISK_CAPACITY=${capacity:-Unknown}
