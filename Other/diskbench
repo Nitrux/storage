@@ -37,6 +37,7 @@ fi
 
 
 # -- Ensure necessary tools are installed.
+
 if ! command -v fio &>/dev/null || ! command -v ioping &>/dev/null || ! command -v smartctl &>/dev/null; then
     echo "Please install 'fio', 'ioping', and 'smartmontools' first!"
     exit 1
@@ -46,6 +47,7 @@ fi
 # -- Default values.
 
 DISK_DEVICE=""
+PARTITION=""
 TEST_DIR=""
 RESULT_FILE=""
 
@@ -58,17 +60,21 @@ while [[ $# -gt 0 ]]; do
             DISK_DEVICE="$2"
             shift 2
             ;;
-        --results)
-            RESULT_FILE="$2"
+        --partition)
+            PARTITION="$2"
             shift 2
             ;;
         --test-dir)
             TEST_DIR="$2"
             shift 2
             ;;
+        --results)
+            RESULT_FILE="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 --disk /dev/sdX [--test-dir /path/to/dir] [--results output_file.txt]"
+            echo "Usage: $0 --disk /dev/sdX [--partition /dev/sdX1] --test-dir /path/to/dir [--results output_file.txt]"
             exit 1
             ;;
     esac
@@ -83,11 +89,26 @@ if [[ -z "$DISK_DEVICE" ]]; then
 fi
 
 if [[ -z "$TEST_DIR" ]]; then
-    TEST_DIR=$(lsblk -ndo MOUNTPOINT "$DISK_DEVICE" | head -n 1)
-    if [[ -z "$TEST_DIR" ]]; then
-        echo "Error: No mounted partition found for $DISK_DEVICE. Specify a test directory with --test-dir."
+    echo "Error: Test directory is not specified. Use --test-dir to specify a directory on the target device."
+    exit 1
+fi
+
+if [[ -z "$PARTITION" ]]; then
+    PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | awk 'NR==2')
+    if [[ -z "$PARTITION" ]]; then
+        echo "Error: No partition found on $DISK_DEVICE. Specify a partition using --partition."
         exit 1
     fi
+fi
+
+
+# -- Verify that the test directory is on the specified partition.
+
+TEST_DIR_DEVICE=$(findmnt -n -o SOURCE "$TEST_DIR")
+if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
+    echo "Error: Test directory $TEST_DIR is not on the specified partition $PARTITION."
+    echo "Found: $TEST_DIR_DEVICE"
+    exit 1
 fi
 
 
