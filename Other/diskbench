@@ -263,22 +263,41 @@ while [[ $# -gt 0 ]]; do
 done
 
 
+# -- Validate disk device.
+
+if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
+    puts_error "Unsupported or invalid disk device: $DISK_DEVICE"
+    print_message ""
+    puts_info "Supported devices are:"
+    puts_info "  - SATA/SCSI devices: /dev/sdX"
+    puts_info "  - NVMe devices: /dev/nvmeXnY"
+    print_message ""
+    puts_info "Unsupported devices include:"
+    puts_info "  - IDE drives: /dev/hdX"
+    puts_info "  - Tapes: /dev/stX, /dev/nstX"
+    puts_info "  - Floppy drives: /dev/fdX"
+    puts_info "  - RAM disks: /dev/ramX"
+    puts_info "  - Loop devices: /dev/loopX"
+    puts_info "  - Optical drives: /dev/srX"
+    exit 1
+fi
+
 # -- Validate arguments.
 
 if [[ -z "$DISK_DEVICE" ]]; then
-    puts_error "Error: Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
+    puts_error "Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
     exit 1
 fi
 
 if [[ -z "$TEST_DIR" ]]; then
-    puts_error "Error: Test directory is not specified. Use --test-dir to specify a directory on the target device."
+    puts_error "Test directory is not specified. Use --test-dir to specify a directory on the target device."
     exit 1
 fi
 
 if [[ -z "$PARTITION" ]]; then
     PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | grep -E "^${DISK_DEVICE}[a-z0-9]*$")
     if [[ -z "$PARTITION" ]]; then
-        puts_error "Error: No partition found on $DISK_DEVICE. Specify a partition using --partition."
+        puts_error "No partition found on $DISK_DEVICE. Specify a partition using --partition."
         exit 1
     fi
 fi
@@ -288,14 +307,14 @@ fi
 
 TEST_DIR_DEVICE=$(findmnt -n -o SOURCE "$TEST_DIR" 2>/dev/null || echo "NotFound")
 if [[ "$TEST_DIR_DEVICE" == "NotFound" ]]; then
-    puts_error "Error: Could not determine the source device for $TEST_DIR. Is it properly mounted?"
+    puts_error "Could not determine the source device for $TEST_DIR. Is it properly mounted?"
     exit 1
 fi
 
 TEST_DIR_DEVICE=${TEST_DIR_DEVICE//\[*\]/}
 
 if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
-    puts_error "Error: Test directory $TEST_DIR is not on the specified partition $PARTITION."
+    puts_error "Test directory $TEST_DIR is not on the specified partition $PARTITION."
     puts_info "Found: $TEST_DIR_DEVICE"
     exit 1
 fi
