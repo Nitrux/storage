@@ -201,8 +201,8 @@ output_results "Disk Read:            ${READ_RESULT:-Unknown}\n"
 
 clear_caches
 output_results "Measuring disk latency..."
-LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk '{print $4}')
-output_results "Disk Latency:         ${LATENCY_RESULT:-Unknown}\n"
+LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk -F'[=/]' '{print $5}')
+output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}\n"
 
 
 # -- Cleanup.
