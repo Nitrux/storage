@@ -28,6 +28,14 @@
 set -euo pipefail
 
 
+# -- Set program name and version.
+
+TOOL_NAME="Nitrux Disk Benchmark"
+TOOL_VERSION="$(md5sum "$0" | cut -c -32)"
+VENDOR='Nitrux Latinoamericana S.C.'
+FECHA=$(date +%Y)
+
+
 # -- Check if script is run with sudo.
 
 if [[ $EUID -ne 0 ]]; then
@@ -81,16 +89,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-# -- Clear PageCache, Dentries, and Inodes.
-
-clear_caches() {
-    echo "Clearing PageCache, Dentries, and Inodes..."
-    sync
-    echo 3 > /proc/sys/vm/drop_caches
-    echo "Caches cleared."
-}
-
-
 # -- Validate arguments.
 
 if [[ -z "$DISK_DEVICE" ]]; then
@@ -129,13 +127,19 @@ if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
 fi
 
 
-# -- Prepare results output function.
+# -- Functions.
+
+clear_caches() {
+    sync
+    echo 3 > /proc/sys/vm/drop_caches
+}
+
 
 output_results() {
     if [[ -n "$RESULT_FILE" ]]; then
         echo "$1" >> "$RESULT_FILE"
     else
-        echo "$1"
+        echo -e "$1"
     fi
 }
 
@@ -167,9 +171,8 @@ get_disk_info
 
 # -- Write header to results file or console.
 
-output_results "Disk Model: ${DISK_MODEL}"
-output_results "Date of Manufacture: ${DISK_DOM}"
-output_results "Capacity: ${DISK_CAPACITY}"
+output_results "$TOOL_NAME v$TOOL_VERSION\n(c) $FECHA Some Rights Reserved. Made by $VENDOR\n"
+output_results "Disk Model: ${DISK_MODEL}\nDate of Manufacture: ${DISK_DOM}\nCapacity: ${DISK_CAPACITY}\n"
 output_results ""
 
 
@@ -178,15 +181,14 @@ output_results ""
 clear_caches
 output_results "Measuring write speed..."
 WRITE_RESULT=$(fio --name=write_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=write --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
-output_results "Disk Write: ${WRITE_RESULT:-Unknown}"
-
+output_results "Disk Write: ${WRITE_RESULT:-Unknown}\n"
 
 # -- Measure read speed.
 
 clear_caches
 output_results "Measuring read speed..."
 READ_RESULT=$(fio --name=read_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=read --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "READ" | awk '{print $2, $3}')
-output_results "Disk Read: ${READ_RESULT:-Unknown}"
+output_results "Disk Read: ${READ_RESULT:-Unknown}\n"
 
 
 # -- Measure latency with ioping.
@@ -194,13 +196,13 @@ output_results "Disk Read: ${READ_RESULT:-Unknown}"
 clear_caches
 output_results "Measuring disk latency..."
 LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk '{print $4}')
-output_results "Disk Latency: ${LATENCY_RESULT:-Unknown}"
+output_results "Disk Latency: ${LATENCY_RESULT:-Unknown}\n"
 
 
 # -- Cleanup.
 
 rm -f "$TEST_DIR/disk_test_file"
-output_results "Temporary test file removed."
+output_results "The temporary test file was removed."
 
 if [[ -n "$RESULT_FILE" ]]; then
     echo "Benchmark results saved in $RESULT_FILE"
