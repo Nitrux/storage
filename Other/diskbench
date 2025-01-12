@@ -174,8 +174,14 @@ get_disk_info() {
 
 get_disk_health() {
     local health_status
-    health_status=$(smartctl -H "$DISK_DEVICE" 2>/dev/null | grep -i "SMART overall-health" | awk -F: '{print $2}' | xargs || echo "Unknown")
-    DISK_HEALTH=${health_status:-Unknown}
+
+    health_status=$(smartctl -H "$DISK_DEVICE" 2>/dev/null | grep -i 'SMART overall-health' | awk -F: '{print $2}' | xargs || true)
+
+    if [[ -z "$health_status" ]]; then
+        DISK_HEALTH="Unknown"
+    else
+        DISK_HEALTH="$health_status"
+    fi
 }
 
 get_disk_temperature() {
@@ -326,6 +332,8 @@ output_results "Disk Temperature:     ${DISK_TEMPERATURE:-Unknown}°C"
 output_results "Power Cycles:         ${DISK_POWER_CYCLES:-Unknown}"
 output_results "Power On Hours:       ${DISK_POWER_ON_HOURS:-Unknown} hours"
 output_results ""
+
+exit 1
 
 
 # -- Measure sequential write speed with big blocks (QD32).
