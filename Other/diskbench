@@ -25,7 +25,7 @@
 
 # -- Exit on errors.
 
-set -xeuo pipefail
+set -euo pipefail
 
 
 # -- Check if script is run with sudo.
@@ -81,6 +81,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 
+# -- Clear PageCache, Dentries, and Inodes.
+
+clear_caches() {
+    echo "Clearing PageCache, Dentries, and Inodes..."
+    sync
+    echo 3 > /proc/sys/vm/drop_caches
+    echo "Caches cleared."
+}
+
+
 # -- Validate arguments.
 
 if [[ -z "$DISK_DEVICE" ]]; then
@@ -94,7 +104,7 @@ if [[ -z "$TEST_DIR" ]]; then
 fi
 
 if [[ -z "$PARTITION" ]]; then
-    PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | awk 'NR==2')
+    PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | grep -E "^${DISK_DEVICE}[a-z0-9]*$")
     if [[ -z "$PARTITION" ]]; then
         echo "Error: No partition found on $DISK_DEVICE. Specify a partition using --partition."
         exit 1
@@ -104,7 +114,14 @@ fi
 
 # -- Verify that the test directory is on the specified partition.
 
-TEST_DIR_DEVICE=$(findmnt -n -o SOURCE "$TEST_DIR")
+TEST_DIR_DEVICE=$(findmnt -n -o SOURCE "$TEST_DIR" 2>/dev/null || echo "NotFound")
+if [[ "$TEST_DIR_DEVICE" == "NotFound" ]]; then
+    echo "Error: Could not determine the source device for $TEST_DIR. Is it properly mounted?"
+    exit 1
+fi
+
+TEST_DIR_DEVICE=${TEST_DIR_DEVICE//\[*\]/}
+
 if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
     echo "Error: Test directory $TEST_DIR is not on the specified partition $PARTITION."
     echo "Found: $TEST_DIR_DEVICE"
@@ -158,6 +175,7 @@ output_results ""
 
 # -- Measure write speed.
 
+clear_caches
 output_results "Measuring write speed..."
 WRITE_RESULT=$(fio --name=write_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=write --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "WRITE" | awk '{print $2, $3}')
 output_results "Disk Write: ${WRITE_RESULT:-Unknown}"
@@ -165,6 +183,7 @@ output_results "Disk Write: ${WRITE_RESULT:-Unknown}"
 
 # -- Measure read speed.
 
+clear_caches
 output_results "Measuring read speed..."
 READ_RESULT=$(fio --name=read_test --filename="$TEST_DIR/disk_test_file" --size=1G --bs=128K --rw=read --direct=1 --numjobs=1 --time_based --runtime=10 --group_reporting | grep "READ" | awk '{print $2, $3}')
 output_results "Disk Read: ${READ_RESULT:-Unknown}"
@@ -172,6 +191,7 @@ output_results "Disk Read: ${READ_RESULT:-Unknown}"
 
 # -- Measure latency with ioping.
 
+clear_caches
 output_results "Measuring disk latency..."
 LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk '{print $4}')
 output_results "Disk Latency: ${LATENCY_RESULT:-Unknown}"
@@ -186,3 +206,5 @@ if [[ -n "$RESULT_FILE" ]]; then
     echo "Benchmark results saved in $RESULT_FILE"
     cat "$RESULT_FILE"
 fi
+
+clear_caches
