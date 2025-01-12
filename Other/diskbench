@@ -108,13 +108,85 @@ if ! command -v fio &>/dev/null || ! command -v ioping &>/dev/null || ! command 
 fi
 
 
-# -- Default values.
+# -- Functions.
+
+clear_caches() {
+    sync
+    echo 3 > /proc/sys/vm/drop_caches
+}
+
+output_results() {
+    if [[ -n "$RESULT_FILE" ]]; then
+        puts_info "$1" >> "$RESULT_FILE"
+    else
+        echo -e "$1"
+    fi
+}
+
+get_disk_info() {
+    local model capacity dom
+
+    if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
+        model=$(smartctl -i "$DISK_DEVICE" | grep "Model Number" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep "Firmware Version" | awk -F: '{print $2}' | xargs || true)
+    else
+        model=$(smartctl -i "$DISK_DEVICE" | grep "Device Model" | awk -F: '{print $2}' | xargs || true)
+        dom=$(smartctl -i "$DISK_DEVICE" | grep "Manufactured" | awk -F: '{print $2}' | xargs || true)
+    fi
+
+    if [[ -z "$model" ]]; then
+        model=$(lsblk -no MODEL "$DISK_DEVICE" | head -n 1 | xargs)
+    fi
+    if [[ -z "$dom" ]]; then
+        dom="Unknown (USB-connected or unreported)"
+    fi
+
+    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
+
+    DISK_MODEL=${model:-Unknown}
+    DISK_CAPACITY=${capacity:-Unknown}
+    DISK_DOM=${dom:-Unknown}
+}
+
+get_disk_health() {
+    local health_status
+    health_status=$(smartctl -H "$DISK_DEVICE" | grep -i "SMART overall-health" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    DISK_HEALTH=${health_status:-Unknown}
+}
+
+get_disk_temperature() {
+    local temperature
+
+    temperature=$(smartctl -A "$DISK_DEVICE" | grep -i "Temperature:" | head -n 1 | awk '{print $2}' || true)
+
+    if [[ -n "$temperature" ]]; then
+        DISK_TEMPERATURE="${temperature}°C"
+    else
+        DISK_TEMPERATURE="Unknown"
+    fi
+}
+
+get_disk_power_cycles() {
+    local power_cycles
+    power_cycles=$(smartctl -A "$DISK_DEVICE" | grep -i "Power Cycles" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    DISK_POWER_CYCLES=${power_cycles:-Unknown}
+}
+
+get_disk_power_on_hours() {
+    local power_on_hours
+    power_on_hours=$(smartctl -A "$DISK_DEVICE" | grep -i "Power On Hours" | awk -F: '{print $2}' | xargs || echo "Unknown")
+    DISK_POWER_ON_HOURS=${power_on_hours:-Unknown}
+}
+
+
+# -- Variables.
 
 DISK_DEVICE=""
 PARTITION=""
 TEST_DIR=""
 RESULT_FILE=""
 
+#   ====== START ======
 
 # -- Parse arguments.
 
@@ -183,54 +255,13 @@ if [[ "$TEST_DIR_DEVICE" != "$PARTITION" ]]; then
 fi
 
 
-# -- Functions.
-
-clear_caches() {
-    sync
-    echo 3 > /proc/sys/vm/drop_caches
-}
-
-
-output_results() {
-    if [[ -n "$RESULT_FILE" ]]; then
-        puts_info "$1" >> "$RESULT_FILE"
-    else
-        echo -e "$1"
-    fi
-}
-
-
-# -- Detect disk type (SATA, NVMe, or USB).
-
-get_disk_info() {
-    local model capacity dom
-
-    if [[ "$DISK_DEVICE" =~ ^/dev/nvme ]]; then
-        model=$(smartctl -i "$DISK_DEVICE" | grep "Model Number" | awk -F: '{print $2}' | xargs || true)
-        dom=$(smartctl -i "$DISK_DEVICE" | grep "Firmware Version" | awk -F: '{print $2}' | xargs || true)
-    else
-        model=$(smartctl -i "$DISK_DEVICE" | grep "Device Model" | awk -F: '{print $2}' | xargs || true)
-        dom=$(smartctl -i "$DISK_DEVICE" | grep "Manufactured" | awk -F: '{print $2}' | xargs || true)
-    fi
-
-    if [[ -z "$model" ]]; then
-        model=$(lsblk -no MODEL "$DISK_DEVICE" | head -n 1 | xargs)
-    fi
-    if [[ -z "$dom" ]]; then
-        dom="Unknown (USB-connected or unreported)"
-    fi
-
-    capacity=$(lsblk -ndo SIZE "$DISK_DEVICE")
-
-    DISK_MODEL=${model:-Unknown}
-    DISK_CAPACITY=${capacity:-Unknown}
-    DISK_DOM=${dom:-Unknown}
-}
-
-
 # -- Fetch disk details.
 
 get_disk_info
+get_disk_health
+get_disk_temperature
+get_disk_power_cycles
+get_disk_power_on_hours
 
 
 # -- Write header to results file or console.
@@ -242,6 +273,10 @@ output_results ""
 output_results "Disk Model:           ${DISK_MODEL:-Unknown}"
 output_results "Date of Manufacture:  ${DISK_DOM:-Unknown}"
 output_results "Capacity:             ${DISK_CAPACITY:-Unknown}"
+output_results "Disk Health:          ${DISK_HEALTH:-Unknown}"
+output_results "Disk Temperature:     ${DISK_TEMPERATURE:-Unknown}°C"
+output_results "Power Cycles:         ${DISK_POWER_CYCLES:-Unknown}"
+output_results "Power On Hours:       ${DISK_POWER_ON_HOURS:-Unknown} hours"
 output_results ""
 
 
@@ -281,10 +316,10 @@ clear_caches
 output_results "Measuring mixed random 4K read/write speed (QD1)..."
 MIXED_RW_RESULT=$(fio --name=mixed_rw_test --eta-newline=5s --filename="$TEST_DIR/disk_test_file" \
 --rw=randrw --size=500m --io_size=10g --blocksize=4k --ioengine=libaio --fsync=1 --iodepth=1 \
---direct=1 --numjobs=1 --runtime=60 --group_reporting | grep "IOPS=")
+--direct=1 --numjobs=1 --runtime=60 --group_reporting | grep -E "(read:|write:)")
 
-MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep -oP '(?<=r=)[^,]+')
-MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep -oP '(?<=w=)[^,]+')
+MIXED_RW_READ_IOPS=$(echo "$MIXED_RW_RESULT" | grep "read:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
+MIXED_RW_WRITE_IOPS=$(echo "$MIXED_RW_RESULT" | grep "write:" | awk -F'IOPS=' '{print $2}' | awk '{print $1}')
 
 output_results "Mixed Random 4K RW (QD1): Read IOPS: ${MIXED_RW_READ_IOPS:-Unknown}, Write IOPS: ${MIXED_RW_WRITE_IOPS:-Unknown}\n"
 
@@ -308,3 +343,5 @@ if [[ -n "$RESULT_FILE" ]]; then
 fi
 
 clear_caches
+
+#   ====== END ======
