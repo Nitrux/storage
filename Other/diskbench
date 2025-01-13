@@ -143,7 +143,7 @@ show_help() {
     print_message "    --debug                 Enable verbose output."
     print_message ""
     print_message "Usage:"
-    print_message "    sudo diskbench --disk /path/to/block_device --partition /path/to/device_partition --test-dir /path/to/dir_on_partition [--results output_file.txt] [--debug]"
+    print_message "    sudo diskbench --disk /path/to/block_device --partition /path/to/device_partition --test-dir /path/to/dir_on_partition [--results /path/to/output_file.txt] [--debug]"
     print_message ""
     print_message "Examples:"
     print_message "    sudo diskbench --disk /dev/sda --partition /dev/sda1 --test-dir /media/uri/Disco\\ 3"
