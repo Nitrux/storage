@@ -229,6 +229,7 @@ get_disk_power_on_hours() {
 
 SCRIPT_COMPLETED=false
 
+
 # -- Handle script interruption and cleanup.
 
 trap 'clean_on_exit' INT TERM EXIT
@@ -464,7 +465,7 @@ output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}"
 output_results ""
 
 
-# -- Set script completion flag to true on successful execution.
+# -- Set script completion to true on successful execution.
 
 SCRIPT_COMPLETED=true
 
