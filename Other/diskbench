@@ -318,19 +318,35 @@ PERFORM_TEST=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --disk)
+            if [[ -z ${2-} || "$2" =~ ^-- ]]; then
+                puts_error "No device specified for --disk. Use --disk followed by a valid device path (e.g., /dev/sda)."
+                exit 1
+            fi
             DISK_DEVICE="$2"
             PERFORM_TEST=true
             shift 2
             ;;
         --partition)
+            if [[ -z ${2-} || "$2" =~ ^-- ]]; then
+                puts_error "No partition specified for --partition. Use --partition followed by a valid partition path (e.g., /dev/sda1)."
+                exit 1
+            fi
             PARTITION="$2"
             shift 2
             ;;
         --test-dir)
+            if [[ -z ${2-} || "$2" =~ ^-- ]]; then
+                puts_error "No directory specified for --test-dir. Use --test-dir followed by a valid directory path."
+                exit 1
+            fi
             TEST_DIR="$2"
             shift 2
             ;;
         --results)
+            if [[ -z ${2-} || "$2" =~ ^-- ]]; then
+                puts_error "No file specified for --results. Use --results followed by a valid file path."
+                exit 1
+            fi
             RESULT_FILE="$2"
             shift 2
             ;;
@@ -351,7 +367,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-
 # -- Validate arguments.
 
 if [[ "$PERFORM_TEST" == true ]]; then
@@ -360,8 +375,18 @@ if [[ "$PERFORM_TEST" == true ]]; then
         exit 1
     fi
 
+    if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
+        puts_error "Invalid or unsupported disk device: $DISK_DEVICE. Supported devices are /dev/sdX or /dev/nvmeXnY."
+        exit 1
+    fi
+
     if [[ -z "$TEST_DIR" ]]; then
         puts_error "Test directory is not specified. Use --test-dir to specify a directory on the target device."
+        exit 1
+    fi
+
+    if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
+        puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
         exit 1
     fi
 
