@@ -37,6 +37,16 @@ VENDOR='Nitrux Latinoamericana S.C.'
 FECHA=$(date +%Y)
 
 
+# -- Track script completion.
+
+SCRIPT_COMPLETED=false
+
+
+# -- Handle script interruption and cleanup.
+
+trap 'clean_on_exit' INT TERM EXIT
+
+
 # -- Print informative messages to stderr.
 
 puts_info() {
@@ -223,16 +233,6 @@ get_disk_power_on_hours() {
 
     DISK_POWER_ON_HOURS=${power_on_hours:-Unknown}
 }
-
-
-# -- Track script completion.
-
-SCRIPT_COMPLETED=false
-
-
-# -- Handle script interruption and cleanup.
-
-trap 'clean_on_exit' INT TERM EXIT
 
 
 # -- Cleanup function to delete disk_test_file and handle result conditions.
