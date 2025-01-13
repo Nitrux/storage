@@ -225,6 +225,42 @@ get_disk_power_on_hours() {
 }
 
 
+# -- Handle script interruption and cleanup.
+
+trap 'clean_on_exit' INT TERM EXIT
+
+
+# -- Cleanup function to delete disk_test_file and handle result conditions.
+
+clean_on_exit() {
+    local temp_file="$TEST_DIR/disk_test_file"
+
+    if [[ -n "$TEST_DIR" && -f "$temp_file" ]]; then
+        rm -f "$temp_file"
+        puts_info "Deleted temporary test file: $temp_file"
+    fi
+
+    if { [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; } || \
+       { [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; }; then
+        if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
+            puts_error "The specified results file directory is not writable: $RESULT_FILE"
+        fi
+        if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
+            puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
+        fi
+        exit 1
+    fi
+
+    if [[ -n "$RESULT_FILE" ]]; then
+        puts_success "Benchmark results saved to: $RESULT_FILE"
+    else
+        output_results "⚠ Important: No file is specified for saving benchmark results."
+    fi
+
+    clear_caches
+}
+
+
 # -- Variables.
 
 DISK_DEVICE=""
@@ -417,30 +453,11 @@ output_results ""
 clear_caches
 output_results "Measuring disk latency..."
 LATENCY_RESULT=$(ioping -c 10 "$TEST_DIR" | grep "min/avg/max" | awk -F'[=/]' '{print $5}' || echo "Unknown")
-output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}\n"
+output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}"
 output_results ""
 
 
-# -- Cleanup.
-
-rm -f "$TEST_DIR/disk_test_file"
-
-if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
-    puts_error "The specified results file directory is not writable: $RESULT_FILE"
-    exit 1
-fi
-
-if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
-    puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
-    exit 1
-fi
-
-if [[ -n "$RESULT_FILE" ]]; then
-    puts_success "Benchmark results saved to: $RESULT_FILE"
-else
-    output_results "⚠ Important: No file is specified for saving benchmark results."
-fi
-
-clear_caches
+# -- Explicit cleanup at the end of the script.
+clean_on_exit
 
 #   ====== END ======
