@@ -120,6 +120,28 @@ fi
 
 # -- Functions.
 
+show_help() {
+    print_message "Description:"
+    print_message "    Nitrux Disk Benchmark is a utility that provides a simple way to measure the performance of a block device."
+    print_message ""
+    print_message "    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues."
+    print_message ""
+    print_message "Flags:"
+    print_message "    --disk                  Specify the block device (e.g., /dev/sdX, /dev/nvmeXnY)."
+    print_message "    --partition             Specify the partition (e.g., /dev/sdX1)."
+    print_message "    --test-dir              Specify the directory for benchmark testing."
+    print_message "    --results               Specify a file to save benchmark results."
+    print_message "    --help                  Show this help."
+    print_message "    --debug                 Enable verbose output."
+    print_message ""
+    print_message "Usage:"
+    print_message "    sudo diskbench --disk /path/to/block_device --partition /path/to/device_partition --test-dir /path/to/dir_on_partition [--results output_file.txt] [--debug]"
+    print_message ""
+    print_message "Examples:"
+    print_message "    sudo diskbench --disk /dev/sda --partition /dev/sda1 --test-dir /media/uri/Disco\\ 3"
+    print_message "    sudo diskbench --disk /dev/nvme0n1 --partition /dev/nvme0n1p3 --test-dir /home/uri"
+}
+
 clear_caches() {
     sync
     echo 3 > /proc/sys/vm/drop_caches
@@ -245,15 +267,18 @@ clean_on_exit() {
         puts_info "Deleted temporary test file: $temp_file"
     fi
 
-    if [[ "$SCRIPT_COMPLETED" == false ]]; then
+    if [[ "$PERFORM_TEST" == true && "$SCRIPT_COMPLETED" == false ]]; then
         if { [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; } || \
-           { [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; }; then
+           { [[ -z "$TEST_DIR" || ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; }; then
+
             if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
                 puts_error "The specified results file directory is not writable: $RESULT_FILE"
             fi
-            if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
+
+            if [[ -z "$TEST_DIR" || ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
                 puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
             fi
+
             exit 1
         fi
     fi
@@ -280,10 +305,13 @@ RESULT_FILE=""
 
 # -- Parse arguments.
 
+PERFORM_TEST=false
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --disk)
             DISK_DEVICE="$2"
+            PERFORM_TEST=true
             shift 2
             ;;
         --partition)
@@ -298,13 +326,45 @@ while [[ $# -gt 0 ]]; do
             RESULT_FILE="$2"
             shift 2
             ;;
+        --debug)
+            set -x
+            shift
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
         *)
             puts_error "Unknown argument: $1"
-            puts_info "Usage: $0 --disk /dev/sdX [--partition /dev/sdX1] --test-dir /path/to/dir [--results output_file.txt]"
+            show_help
             exit 1
             ;;
     esac
 done
+
+
+
+# -- Validate arguments.
+
+if [[ "$PERFORM_TEST" == true ]]; then
+    if [[ -z "$DISK_DEVICE" ]]; then
+        puts_error "Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
+        exit 1
+    fi
+
+    if [[ -z "$TEST_DIR" ]]; then
+        puts_error "Test directory is not specified. Use --test-dir to specify a directory on the target device."
+        exit 1
+    fi
+
+    if [[ -z "$PARTITION" ]]; then
+        PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | grep -E "^${DISK_DEVICE}[a-z0-9]*$")
+        if [[ -z "$PARTITION" ]]; then
+            puts_error "No partition found on $DISK_DEVICE. Specify a partition using --partition."
+            exit 1
+        fi
+    fi
+fi
 
 
 # -- Validate disk device.
@@ -323,27 +383,9 @@ if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
     puts_info "  - RAM disks: /dev/ramX"
     puts_info "  - Loop devices: /dev/loopX"
     puts_info "  - Optical drives: /dev/srX"
+    print_message ""
+    show_help
     exit 1
-fi
-
-# -- Validate arguments.
-
-if [[ -z "$DISK_DEVICE" ]]; then
-    puts_error "Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
-    exit 1
-fi
-
-if [[ -z "$TEST_DIR" ]]; then
-    puts_error "Test directory is not specified. Use --test-dir to specify a directory on the target device."
-    exit 1
-fi
-
-if [[ -z "$PARTITION" ]]; then
-    PARTITION=$(lsblk -npo NAME "$DISK_DEVICE" | grep -E "^${DISK_DEVICE}[a-z0-9]*$")
-    if [[ -z "$PARTITION" ]]; then
-        puts_error "No partition found on $DISK_DEVICE. Specify a partition using --partition."
-        exit 1
-    fi
 fi
 
 
