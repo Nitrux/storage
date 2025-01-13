@@ -42,11 +42,6 @@ FECHA=$(date +%Y)
 SCRIPT_COMPLETED=false
 
 
-# -- Handle script interruption and cleanup.
-
-trap 'clean_on_exit' INT TERM EXIT
-
-
 # -- Print informative messages to stderr.
 
 puts_info() {
@@ -96,8 +91,18 @@ puts_warning() {
 
 # -- Check if utility is run with sudo.
 
-if [[ $EUID -ne 0 ]]; then
-    echo "This utility must be run as root. Use sudo to execute it."
+if [ "$(id -u)" -ne 0 ]; then
+	puts_error "$TOOL_NAME is not running as root, quitting."
+	exit 1
+else
+	puts_success "$TOOL_NAME is running as root, continuing..."
+fi
+
+
+# -- Check if any arguments are passed
+
+if [ $# -eq 0 ]; then
+    puts_error "No arguments provided to $TOOL_NAME, quitting."
     exit 1
 fi
 
@@ -151,7 +156,7 @@ output_results() {
     if [[ -n "$RESULT_FILE" ]]; then
         puts_info "$1" >> "$RESULT_FILE"
     else
-        echo -e "$1"
+        print_message "$1"
     fi
 }
 
@@ -257,7 +262,9 @@ get_disk_power_on_hours() {
 }
 
 
-# -- Cleanup function to delete disk_test_file and handle result conditions.
+# -- Handle script interruption and cleanup function to delete disk_test_file and handle result conditions.
+
+trap 'clean_on_exit' INT TERM EXIT
 
 clean_on_exit() {
     local temp_file="$TEST_DIR/disk_test_file"
@@ -384,7 +391,7 @@ if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
     puts_info "  - Loop devices: /dev/loopX"
     puts_info "  - Optical drives: /dev/srX"
     print_message ""
-    show_help
+    puts_info "To display the help use --help."
     exit 1
 fi
 
@@ -425,6 +432,7 @@ get_disk_power_on_hours
 
 # -- Write header to results file or console.
 
+output_results ""
 output_results "| $TOOL_NAME version: $TOOL_SHRT_NAME-$TOOL_VERSION."
 output_results "| The license used for this file and its contents is BSD-3-Clause."
 output_results "| (c) $FECHA Some Rights Reserved. Made by $VENDOR"
