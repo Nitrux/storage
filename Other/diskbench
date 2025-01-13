@@ -371,17 +371,17 @@ done
 
 if [[ "$PERFORM_TEST" == true ]]; then
     if [[ -z "$DISK_DEVICE" ]]; then
-        puts_error "Disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
+        puts_error "The disk device is not specified. Use --disk to specify the disk (e.g., /dev/sda or /dev/nvme0n1)."
         exit 1
     fi
 
     if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
-        puts_error "Invalid or unsupported disk device: $DISK_DEVICE. Supported devices are /dev/sdX or /dev/nvmeXnY."
+        puts_error "The disk device: $DISK_DEVICE is invalid or unsupported. The supported devices are /dev/sdX or /dev/nvmeXnY."
         exit 1
     fi
 
     if [[ -z "$TEST_DIR" ]]; then
-        puts_error "Test directory is not specified. Use --test-dir to specify a directory on the target device."
+        puts_error "The test directory is not specified. Use --test-dir to specify a directory on the target device."
         exit 1
     fi
 
