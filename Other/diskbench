@@ -195,10 +195,10 @@ get_disk_info() {
 
     case "$DISK_INTERFACE" in
         "nvme")
-            IO_SIZE="10g"
+            IO_SIZE="2g"
             ;;
         "sata"|"ata")
-            IO_SIZE="5g"
+            IO_SIZE="1g"
             ;;
         "usb")
             IO_SIZE="500m"
@@ -294,7 +294,7 @@ clean_on_exit() {
         if [[ -n "$RESULT_FILE" ]]; then
             puts_success "Benchmark results saved to: $RESULT_FILE"
         else
-            output_results "⚠ Important: No file is specified for saving benchmark results."
+            puts_warning "⚠ Important: No file is specified for saving benchmark results."
         fi
         clear_caches
     fi
