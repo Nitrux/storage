@@ -268,8 +268,11 @@ get_disk_power_on_hours() {
 trap 'clean_on_exit' INT TERM EXIT
 
 clean_on_exit() {
-    local temp_file="$TEST_DIR/disk_test_file"
+    if [[ -z "$DISK_DEVICE" ]]; then
+        return
+    fi
 
+    local temp_file="$TEST_DIR/disk_test_file"
     if [[ -n "$TEST_DIR" && -f "$temp_file" ]]; then
         rm -f "$temp_file"
         puts_info "Deleted temporary test file: $temp_file"
@@ -367,6 +370,28 @@ while [[ $# -gt 0 ]]; do
 done
 
 
+# -- Validate disk device.
+
+if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
+    puts_error "Unsupported or invalid disk device: $DISK_DEVICE"
+    print_message ""
+    puts_info "Supported devices are:"
+    puts_info "  - SATA/USB/SCSI devices: /dev/sdX"
+    puts_info "  - NVMe devices: /dev/nvmeXnY"
+    print_message ""
+    puts_info "Unsupported devices include:"
+    puts_info "  - IDE drives: /dev/hdX"
+    puts_info "  - Tapes: /dev/stX, /dev/nstX"
+    puts_info "  - Floppy drives: /dev/fdX"
+    puts_info "  - RAM disks: /dev/ramX"
+    puts_info "  - Loop devices: /dev/loopX"
+    puts_info "  - Optical drives: /dev/srX"
+    print_message ""
+    puts_info "To display the help use --help."
+    exit 1
+fi
+
+
 # -- Validate arguments.
 
 if [[ "$PERFORM_TEST" == true ]]; then
@@ -397,28 +422,6 @@ if [[ "$PERFORM_TEST" == true ]]; then
             exit 1
         fi
     fi
-fi
-
-
-# -- Validate disk device.
-
-if [[ ! "$DISK_DEVICE" =~ ^/dev/(sd[a-z]|nvme[0-9]+n[0-9]+)$ ]]; then
-    puts_error "Unsupported or invalid disk device: $DISK_DEVICE"
-    print_message ""
-    puts_info "Supported devices are:"
-    puts_info "  - SATA/SCSI devices: /dev/sdX"
-    puts_info "  - NVMe devices: /dev/nvmeXnY"
-    print_message ""
-    puts_info "Unsupported devices include:"
-    puts_info "  - IDE drives: /dev/hdX"
-    puts_info "  - Tapes: /dev/stX, /dev/nstX"
-    puts_info "  - Floppy drives: /dev/fdX"
-    puts_info "  - RAM disks: /dev/ramX"
-    puts_info "  - Loop devices: /dev/loopX"
-    puts_info "  - Optical drives: /dev/srX"
-    print_message ""
-    puts_info "To display the help use --help."
-    exit 1
 fi
 
 
