@@ -25,7 +25,7 @@
 
 # -- Exit on errors.
 
-set -euo pipefail
+set -xeuo pipefail
 
 
 # -- Set program name and version.
@@ -225,6 +225,10 @@ get_disk_power_on_hours() {
 }
 
 
+# -- Track script completion.
+
+SCRIPT_COMPLETED=false
+
 # -- Handle script interruption and cleanup.
 
 trap 'clean_on_exit' INT TERM EXIT
@@ -240,24 +244,27 @@ clean_on_exit() {
         puts_info "Deleted temporary test file: $temp_file"
     fi
 
-    if { [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; } || \
-       { [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; }; then
-        if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
-            puts_error "The specified results file directory is not writable: $RESULT_FILE"
+    if [[ "$SCRIPT_COMPLETED" == false ]]; then
+        if { [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; } || \
+           { [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; }; then
+            if [[ -n "$RESULT_FILE" && ! -w "$(dirname "$RESULT_FILE")" ]]; then
+                puts_error "The specified results file directory is not writable: $RESULT_FILE"
+            fi
+            if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
+                puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
+            fi
+            exit 1
         fi
-        if [[ ! -d "$TEST_DIR" || ! -w "$TEST_DIR" ]]; then
-            puts_error "The test directory ($TEST_DIR) does not exist or is not writable."
-        fi
-        exit 1
     fi
 
-    if [[ -n "$RESULT_FILE" ]]; then
-        puts_success "Benchmark results saved to: $RESULT_FILE"
-    else
-        output_results "⚠ Important: No file is specified for saving benchmark results."
+    if [[ "$SCRIPT_COMPLETED" == true ]]; then
+        if [[ -n "$RESULT_FILE" ]]; then
+            puts_success "Benchmark results saved to: $RESULT_FILE"
+        else
+            output_results "⚠ Important: No file is specified for saving benchmark results."
+        fi
+        clear_caches
     fi
-
-    clear_caches
 }
 
 
@@ -457,7 +464,8 @@ output_results "Disk Latency (avg):  ${LATENCY_RESULT:-Unknown}"
 output_results ""
 
 
-# -- Explicit cleanup at the end of the script.
-clean_on_exit
+# -- Set script completion flag to true on successful execution.
+
+SCRIPT_COMPLETED=true
 
 #   ====== END ======
