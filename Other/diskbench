@@ -130,6 +130,8 @@ show_help() {
     print_message "Description:"
     print_message "    Nitrux Disk Benchmark is a utility that provides a simple way to measure the performance of a block device."
     print_message ""
+    print_message "    ⚠ Important: Continuously performing benchmark tests may shorten SSD/USB Memory life due to wearing the NAND flash."
+    print_message ""
     print_message "    Report bugs at: https://github.com/Nitrux/nitrux-bug-tracker/issues."
     print_message ""
     print_message "Flags:"
@@ -196,10 +198,10 @@ get_disk_info() {
 
     case "$DISK_INTERFACE" in
         "nvme")
-            IO_SIZE="2g"
+            IO_SIZE="4g"
             ;;
         "sata"|"ata")
-            IO_SIZE="1g"
+            IO_SIZE="2g"
             ;;
         "usb")
             IO_SIZE="500m"
@@ -465,6 +467,8 @@ output_results ""
 output_results "| $TOOL_NAME version: $TOOL_SHRT_NAME-$TOOL_VERSION."
 output_results "| The license used for this file and its contents is BSD-3-Clause."
 output_results "| (c) $FECHA Some Rights Reserved. Made by $VENDOR"
+output_results ""
+output_results "| ⚠ Important: Continuously performing benchmark tests may shorten SSD/USB Memory life due to wearing the NAND flash."
 output_results ""
 output_results "Disk Model:           ${DISK_MODEL:-Unknown}"
 output_results "Date of Manufacture:  ${DISK_DOM:-Unknown}"
