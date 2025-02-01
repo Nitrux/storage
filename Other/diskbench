@@ -128,7 +128,7 @@ fi
 show_help() {
     print_message "$TOOL_NAME"
     print_message "Description:"
-    print_message "    Nitrux Disk Benchmark is a utility that provides a simple way to measure the performance of a block device."
+    print_message "    $TOOL_NAME is a utility that provides a simple way to measure the performance of a block device."
     print_message ""
     print_message "    ⚠ Important: Continuously performing benchmark tests may shorten SSD/USB Memory life due to wearing the NAND flash."
     print_message ""
