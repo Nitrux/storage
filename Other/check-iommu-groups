@@ -35,13 +35,11 @@ find /sys/kernel/iommu_groups/* -maxdepth 0 -type d -exec bash -c '
     lastgroup=""
     for d in "$0"/devices/*; do
         device_id=$(basename "$d")
-        group_info=""
         if [ "$group_num" != "$lastgroup" ]; then
-            group_info="Group $group_num:"
-        else
-            group_info="\t\t"
+            printf "\nGroup %s:\n" "$group_num"
         fi
         lastgroup="$group_num"
+
         device_info=$(lspci -nms "$device_id" | awk -F"\"" "{printf \"[%s:%s]\", \$4, \$6}")
         reset_info=""
         if [[ -e "$d"/reset ]]; then
@@ -50,13 +48,16 @@ find /sys/kernel/iommu_groups/* -maxdepth 0 -type d -exec bash -c '
             reset_info="     "
         fi
         lspci_info=$(lspci -mms "$device_id" | awk -F"\"" "{printf \"%s %-40s %s\\n\", \$1, \$2, \$6}")
-        printf "%s%s%s\\n" "$group_info" "$device_info" "$reset_info"
-        printf "%s" "$lspci_info"
+
+        printf "  %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
+
         for u in "$d"/usb*/; do
             if [ -d "$u" ]; then
                 bus=$(cat "${u}/busnum")
-                lsusb_info=$(lsusb -s "$bus:" | awk "{gsub(/:/,\"\",\$4); printf \"%s|%s %s %s %s|\", \$6, \$1, \$2, \$3, \$4; for(i=7;i<=NF;i++){printf \"%s \", \$i}; printf \"\\n\"}" | awk -F"|" "{printf \"USB:\\t\\t[%s]\\t\\t %-40s %s\\n\", \$1, \$2, \$3}")
-                printf "%s" "$lsusb_info"
+                lsusb_info=$(lsusb -s "$bus:" | awk "{gsub(/:/,\"\",\$4); printf \"%s|%s %s %s %s|\", \$6, \$1, \$2, \$3, \$4; for(i=7;i<=NF;i++){printf \"%s \", \$i}; printf \"\\n\"}" | awk -F"|" "{printf \"    USB:  [%s]  %-40s %s\\n\", \$1, \$2, \$3}")
+
+                # Ensure that each USB device entry is on a new line
+                printf "%s\n" "$lsusb_info"
             fi
         done
     done
