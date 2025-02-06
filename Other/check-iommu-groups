@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 
 #############################################################################################################################################################################
 #   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
@@ -23,68 +23,44 @@
 #############################################################################################################################################################################
 
 
-# -- Exit on errors.
-
-set -eu
-
-
 # -- Check IOMMU groups and display output.
 
-find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | while read -r group_path; do
-    group_num=$(basename "$group_path")
+import os
+import glob
+import subprocess
 
-    devices=("$group_path"/devices/*)
-    total_devices=${#devices[@]}
-    count=0
+def get_device_description(device_path):
+    device_name = os.path.basename(device_path)
+    try:
+        result = subprocess.run([
+            "lspci", "-nn", "-s", device_name
+        ], capture_output=True, text=True, check=True)
+        return result.stdout.strip() if result.stdout else "Unknown Device"
+    except Exception:
+        return "Unknown Device"
 
-    printf "\nGroup %s:\n" "$group_num"
+def list_iommu_groups():
+    iommu_path = "/sys/kernel/iommu_groups/"
+    if not os.path.exists(iommu_path):
+        print("IOMMU groups not found. Ensure IOMMU is enabled in the BIOS and kernel parameters.")
+        return
+    
+    groups = sorted([d for d in os.listdir(iommu_path) if d.isdigit()], key=int)
+    
+    for group in groups:
+        group_path = os.path.join(iommu_path, group, "devices")
+        devices = sorted(glob.glob(f"{group_path}/*"))
+        
+        print(f"IOMMU Group {group}:")
+        for i, device in enumerate(devices):
+            if os.path.islink(device):
+                pci_address = os.path.basename(os.readlink(device))
+            else:
+                pci_address = os.path.basename(device)
+            description = get_device_description(pci_address)
+            prefix = "├──" if i < len(devices) - 1 else "└──"
+            print(f"  {prefix} {pci_address} ({description})")
+        print()
 
-    for d in "${devices[@]}"; do
-        device_id=$(basename "$d")
-        count=$((count + 1))
-
-        device_info=$(lspci -nms "$device_id" | awk -F"\"" '{printf "[%s:%s]", $4, $6}')
-        reset_info=""
-        if [[ -e "$d"/reset ]]; then
-            reset_info=" [R] "
-        else
-            reset_info="     "
-        fi
-        lspci_info=$(lspci -mms "$device_id" | awk -F"\"" '{printf "%s %-40s %s", $1, $2, $6}')
-
-        if [ "$count" -eq "$total_devices" ]; then
-            printf "└── %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
-            prefix="    "
-        else
-            printf "├── %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
-            prefix="│   "
-        fi
-
-        usb_devices=("$d"/usb*/)
-        usb_count=0
-        usb_total=${#usb_devices[@]}
-
-        for u in "${usb_devices[@]}"; do
-            if [ -d "$u" ]; then
-                usb_count=$((usb_count + 1))
-                bus=$(cat "${u}/busnum")
-
-                lsusb_output=$(lsusb -s "$bus:" | awk '
-                    {
-                        gsub(/:/, "", $4);
-                        printf "%s|%s %s %s %s|", $6, $1, $2, $3, $4;
-                        for (i = 7; i <= NF; i++) { printf "%s ", $i }
-                        printf "\n"
-                    }')
-
-                while IFS="|" read -r usb_id usb_device usb_name; do
-                    if [ "$usb_count" -eq "$usb_total" ]; then
-                        printf "%s└── USB: [%s]  %-40s %s\n" "$prefix" "$usb_id" "$usb_device" "$usb_name"
-                    else
-                        printf "%s├── USB: [%s]  %-40s %s\n" "$prefix" "$usb_id" "$usb_device" "$usb_name"
-                    fi
-                done <<< "$lsusb_output"
-            fi
-        done
-    done
-done
+if __name__ == "__main__":
+    list_iommu_groups()
