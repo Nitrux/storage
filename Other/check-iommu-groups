@@ -32,7 +32,6 @@ set -eu
 
 find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | while read -r group_path; do
     group_num=$(basename "$group_path")
-    lastgroup=""
 
     devices=("$group_path"/devices/*)
     total_devices=${#devices[@]}
@@ -70,20 +69,21 @@ find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | while read -r group_path; 
                 usb_count=$((usb_count + 1))
                 bus=$(cat "${u}/busnum")
 
-                lsusb_info=$(lsusb -s "$bus:" | awk '
+                lsusb_output=$(lsusb -s "$bus:" | awk '
                     {
                         gsub(/:/, "", $4);
                         printf "%s|%s %s %s %s|", $6, $1, $2, $3, $4;
                         for (i = 7; i <= NF; i++) { printf "%s ", $i }
                         printf "\n"
-                    }' | awk -F"|" '{printf "[%s]  %-40s %s\n", $1, $2, $3}')
+                    }')
 
-                # Determine tree formatting for USB
-                if [ "$usb_count" -eq "$usb_total" ]; then
-                    printf "%s└── USB: %s\n" "$prefix" "$lsusb_info"
-                else
-                    printf "%s├── USB: %s\n" "$prefix" "$lsusb_info"
-                fi
+                while IFS="|" read -r usb_id usb_device usb_name; do
+                    if [ "$usb_count" -eq "$usb_total" ]; then
+                        printf "%s└── USB: [%s]  %-40s %s\n" "$prefix" "$usb_id" "$usb_device" "$usb_name"
+                    else
+                        printf "%s├── USB: [%s]  %-40s %s\n" "$prefix" "$usb_id" "$usb_device" "$usb_name"
+                    fi
+                done <<< "$lsusb_output"
             fi
         done
     done
