@@ -70,7 +70,6 @@ find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | while read -r group_path; 
                 usb_count=$((usb_count + 1))
                 bus=$(cat "${u}/busnum")
 
-                # Ensure safe parsing of lsusb output
                 lsusb_info=$(lsusb -s "$bus:" | awk '
                     {
                         gsub(/:/, "", $4);
