@@ -30,35 +30,62 @@ set -eu
 
 # -- Check IOMMU groups and display output.
 
-find /sys/kernel/iommu_groups/* -maxdepth 0 -type d -exec bash -c '
-    group_num=$(basename "$0")
+find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | while read -r group_path; do
+    group_num=$(basename "$group_path")
     lastgroup=""
-    for d in "$0"/devices/*; do
-        device_id=$(basename "$d")
-        if [ "$group_num" != "$lastgroup" ]; then
-            printf "\nGroup %s:\n" "$group_num"
-        fi
-        lastgroup="$group_num"
 
-        device_info=$(lspci -nms "$device_id" | awk -F"\"" "{printf \"[%s:%s]\", \$4, \$6}")
+    devices=("$group_path"/devices/*)
+    total_devices=${#devices[@]}
+    count=0
+
+    printf "\nGroup %s:\n" "$group_num"
+
+    for d in "${devices[@]}"; do
+        device_id=$(basename "$d")
+        count=$((count + 1))
+
+        device_info=$(lspci -nms "$device_id" | awk -F"\"" '{printf "[%s:%s]", $4, $6}')
         reset_info=""
         if [[ -e "$d"/reset ]]; then
             reset_info=" [R] "
         else
             reset_info="     "
         fi
-        lspci_info=$(lspci -mms "$device_id" | awk -F"\"" "{printf \"%s %-40s %s\\n\", \$1, \$2, \$6}")
+        lspci_info=$(lspci -mms "$device_id" | awk -F"\"" '{printf "%s %-40s %s", $1, $2, $6}')
 
-        printf "  %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
+        if [ "$count" -eq "$total_devices" ]; then
+            printf "└── %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
+            prefix="    "
+        else
+            printf "├── %s%s%s\n" "$device_info" "$reset_info" "$lspci_info"
+            prefix="│   "
+        fi
 
-        for u in "$d"/usb*/; do
+        usb_devices=("$d"/usb*/)
+        usb_count=0
+        usb_total=${#usb_devices[@]}
+
+        for u in "${usb_devices[@]}"; do
             if [ -d "$u" ]; then
+                usb_count=$((usb_count + 1))
                 bus=$(cat "${u}/busnum")
-                lsusb_info=$(lsusb -s "$bus:" | awk "{gsub(/:/,\"\",\$4); printf \"%s|%s %s %s %s|\", \$6, \$1, \$2, \$3, \$4; for(i=7;i<=NF;i++){printf \"%s \", \$i}; printf \"\\n\"}" | awk -F"|" "{printf \"    USB:  [%s]  %-40s %s\\n\", \$1, \$2, \$3}")
 
-                # Ensure that each USB device entry is on a new line
-                printf "%s\n" "$lsusb_info"
+                # Ensure safe parsing of lsusb output
+                lsusb_info=$(lsusb -s "$bus:" | awk '
+                    {
+                        gsub(/:/, "", $4);
+                        printf "%s|%s %s %s %s|", $6, $1, $2, $3, $4;
+                        for (i = 7; i <= NF; i++) { printf "%s ", $i }
+                        printf "\n"
+                    }' | awk -F"|" '{printf "[%s]  %-40s %s\n", $1, $2, $3}')
+
+                # Determine tree formatting for USB
+                if [ "$usb_count" -eq "$usb_total" ]; then
+                    printf "%s└── USB: %s\n" "$prefix" "$lsusb_info"
+                else
+                    printf "%s├── USB: %s\n" "$prefix" "$lsusb_info"
+                fi
             fi
         done
     done
-' {} \;
+done
