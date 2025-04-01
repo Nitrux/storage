@@ -83,7 +83,7 @@ def main():
         'initramfs-tools', 'initramfs-tools-bin', 'initramfs-tools-core', 
         'dpkg-dev', 'libsysprof-capture-4-dev', 'libegl-mesa0', 'libgbm1', 'libgl1-mesa-dri',
         'libglapi-mesa', 'libglx-mesa0', 'libxatracker2', 'mesa-libgallium', 'mesa-va-drivers',
-        'mesa-vdpau-drivers', 'mesa-vulkan-drivers',
+        'mesa-vdpau-drivers', 'mesa-vulkan-drivers', 'mauikit3-git',
     ]
 
     exclude_patterns = [
