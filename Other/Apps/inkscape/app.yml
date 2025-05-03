@@ -149,4 +149,4 @@ sandbox:
     - DISPLAY
 
 integration:
-  gui_app: true
+  type: gui
