@@ -25,23 +25,24 @@
 
 # -- Exit on errors.
 
-set -xe
+set -euo pipefail
+set -x
+shopt -s nullglob
 
 
 # -- Functions.
 
-dpkg_force_remove () { /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"; }
+dpkg_force_remove() { /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"; }
 
 
 # -- Remove APT using dpkg.
 
-REMOVE_DEB_BITS_PKGS=(
-	apt
-	apt-transport-https
-	apt-utils
-)
-
-dpkg_force_remove "${REMOVE_DEB_BITS_PKGS[@]}"
+REMOVE_DEB_BITS_PKGS=(apt apt-transport-https apt-utils)
+for pkg in "${REMOVE_DEB_BITS_PKGS[@]}"; do
+    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+        dpkg_force_remove "$pkg" || true
+    fi
+done
 
 
 # -- Remove dpkg and APT files, libraries, and binaries that might still exist.
@@ -60,43 +61,47 @@ REMOVE_DPKG_FILES=(
     /usr/bin/update-alternatives
     /usr/lib/x86_64-linux-gnu/libapt-pkg.so.*
     /usr/sbin/dpkg-*
-    /usr/share/doc/libapt-pkg6.0/
-    /usr/share/dpkg/
     /usr/share/lintian/overrides/dpkg
     /usr/share/polkit-1/actions/org.dpkg.pkexec.update-alternatives.policy
     /var/log/dpkg.log
 )
-
 rm -f "${REMOVE_DPKG_FILES[@]}"
 
 REMOVE_DPKG_DIRS=(
     /etc/apt
     /etc/dpkg
     /usr/libexec/dpkg
-    /usr/share/doc/dpkg/
+    /usr/share/doc/dpkg
+    /usr/share/doc/libapt-pkg6.0
+    /usr/share/dpkg
     /var/cache/apt
     /var/lib/apt/lists
-    /var/lib/dpkg/
-    /var/log/apt/
+    /var/lib/dpkg
+    /var/log/apt
 )
-
-rm -r "${REMOVE_DPKG_DIRS[@]}"
+rm -rf "${REMOVE_DPKG_DIRS[@]}"
 
 
 # -- Delete package manager translation files.
 
-find /usr/share/locale/ -type f -name 'apt.mo' -exec rm -f {} \;
-find /usr/share/locale/ -type f -name 'dpkg.mo' -exec rm -f {} \;
-find /usr/share/locale/ -type f -name 'libapt-pkg6.0.mo' -exec rm -f {} \;
+find /usr/share/locale/ -type f -name 'apt.mo' -exec rm -f {} +
+find /usr/share/locale/ -type f -name 'dpkg.mo' -exec rm -f {} +
+find /usr/share/locale/ -type f -name 'libapt-pkg6.0.mo' -exec rm -f {} +
 
 
 # -- Delete live user from root because idontfuckingknowwhy the postrm script in the package doesn't actually do that, so let's brute force that.
 
-deluser --remove-home nitrux
+if command -v deluser >/dev/null 2>&1; then
+    deluser --remove-home nitrux || true
+elif command -v userdel >/dev/null 2>&1; then
+    userdel -r nitrux || true
+fi
 
 
 # -- Run update-grub because, for some "reason," the parameter "ro" is added to the GRUB menu entries.
 # -- This parameter completely fucks up the overlay and renders the system unusable.
 # -- We've replaced update-grub in the ISO with a custom version that removes the parameter after generating the menu file.
 
-update-grub
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub
+fi
