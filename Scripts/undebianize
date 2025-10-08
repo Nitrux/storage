@@ -48,9 +48,7 @@ dpkg_force_remove "${REMOVE_DEB_BITS_PKGS[@]}"
 
 REMOVE_DPKG_FILES=(
     /etc/alternatives/README
-    /etc/apt
     /etc/cron.daily/dpkg
-    /etc/dpkg
     /etc/logrotate.d/alternatives
     /etc/logrotate.d/dpkg
     /lib/systemd/system/dpkg-db-backup.*
@@ -61,21 +59,28 @@ REMOVE_DPKG_FILES=(
     /usr/bin/dpkg-*
     /usr/bin/update-alternatives
     /usr/lib/x86_64-linux-gnu/libapt-pkg.so.*
-    /usr/libexec/dpkg
     /usr/sbin/dpkg-*
-    /usr/share/doc/dpkg/
     /usr/share/doc/libapt-pkg6.0/
     /usr/share/dpkg/
     /usr/share/lintian/overrides/dpkg
     /usr/share/polkit-1/actions/org.dpkg.pkexec.update-alternatives.policy
-    /var/cache/apt
-    /var/lib/apt/lists
-    /var/lib/dpkg/
-    /var/log/apt/
     /var/log/dpkg.log
 )
 
 rm -f "${REMOVE_DPKG_FILES[@]}"
+
+REMOVE_DPKG_DIRS=(
+    /etc/apt
+    /etc/dpkg
+    /usr/libexec/dpkg
+    /usr/share/doc/dpkg/
+    /var/cache/apt
+    /var/lib/apt/lists
+    /var/lib/dpkg/
+    /var/log/apt/
+)
+
+rm -r "${REMOVE_DPKG_DIRS[@]}"
 
 
 # -- Delete package manager translation files.
