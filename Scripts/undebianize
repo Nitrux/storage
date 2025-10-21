@@ -78,6 +78,7 @@ REMOVE_DPKG_DIRS=(
     /var/lib/apt/lists
     /var/lib/dpkg
     /var/log/apt
+    /var/log/bootstrap
 )
 rm -rf "${REMOVE_DPKG_DIRS[@]}"
 
