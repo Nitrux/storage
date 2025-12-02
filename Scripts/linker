@@ -31,7 +31,45 @@ set -x
 # -- Link package manager binaries for Calamares to not freak out during installation.
 
 ln -svf /opt/1 /usr/bin/apt
-ln -svf /opt/2 /usr/bin/apt-get
-ln -svf /opt/3 /usr/bin/dpkg
 
-chmod +x /opt/{1,2,3}
+ln -svf /opt/2 /usr/bin/apt-cache
+ln -svf /opt/3 /usr/bin/apt-cdrom
+ln -svf /opt/4 /usr/bin/apt-config
+ln -svf /opt/5 /usr/bin/apt-get
+ln -svf /opt/6 /usr/bin/apt-mark
+
+ln -svf /opt/7 /usr/bin/dpkg 
+
+ln -svf /opt/8 /usr/bin/dpkg-deb
+ln -svf /opt/9 /usr/bin/dpkg-divert
+ln -svf /opt/10 /usr/bin/dpkg-maintscript-helper
+ln -svf /opt/11 /usr/bin/dpkg-query
+ln -svf /opt/12 /usr/bin/dpkg-realpath 
+ln -svf /opt/13 /usr/bin/dpkg-split
+ln -svf /opt/14 /usr/bin/dpkg-statoverride
+ln -svf /opt/15 /usr/bin/dpkg-trigger
+ln -svf /opt/16 /usr/bin/dpkg-architecture
+ln -svf /opt/17 /usr/bin/dpkg-buildapi
+ln -svf /opt/18 /usr/bin/dpkg-buildflags
+ln -svf /opt/19 /usr/bin/dpkg-buildpackage
+ln -svf /opt/20 /usr/bin/dpkg-buildtree
+ln -svf /opt/21 /usr/bin/dpkg-checkbuilddeps
+ln -svf /opt/22 /usr/bin/dpkg-distaddfile
+ln -svf /opt/23 /usr/bin/dpkg-genbuildinfo
+ln -svf /opt/24 /usr/bin/dpkg-genchanges
+ln -svf /opt/25 /usr/bin/dpkg-gencontrol
+ln -svf /opt/26 /usr/bin/dpkg-gensymbols
+ln -svf /opt/27 /usr/bin/dpkg-mergechangelogs
+ln -svf /opt/28 /usr/bin/dpkg-name
+ln -svf /opt/29 /usr/bin/dpkg-parsechangelog
+ln -svf /opt/30 /usr/bin/dpkg-scanpackages
+ln -svf /opt/31 /usr/bin/dpkg-scansources
+ln -svf /opt/32 /usr/bin/dpkg-shlibdeps
+ln -svf /opt/33 /usr/bin/dpkg-source
+ln -svf /opt/34 /usr/bin/dpkg-vendor 
+ln -svf /opt/35 /usr/sbin/dpkg-preconfigure 
+ln -svf /opt/36 /usr/sbin/dpkg-reconfigure
+
+chmod +x /opt/{1..36}
+
+chmod +x /var/lib/dpkg

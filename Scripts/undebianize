@@ -53,9 +53,7 @@ REMOVE_DPKG_FILES=(
     /etc/logrotate.d/alternatives
     /etc/logrotate.d/dpkg
     /lib/systemd/system/dpkg-db-backup.*
-    /opt/1
-    /opt/2
-    /opt/3
+    /opt/{1..36}
     /usr/bin/dpkg
     /usr/bin/dpkg-*
     /usr/bin/update-alternatives
