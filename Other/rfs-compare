@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+
+#############################################################################################################################################################################
+#   The license used for this file and its contents is: BSD-3-Clause                                                                                                        #
+#                                                                                                                                                                           #
+#   Copyright <2024> <Uri Herrera <uri_herrera@nxos.org>>                                                                                                                   #
+#                                                                                                                                                                           #
+#   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:                          #
+#                                                                                                                                                                           #
+#    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.                                        #
+#                                                                                                                                                                           #
+#    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer                                      #
+#       in the documentation and/or other materials provided with the distribution.                                                                                         #
+#                                                                                                                                                                           #
+#    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software                    #
+#       without specific prior written permission.                                                                                                                          #
+#                                                                                                                                                                           #
+#    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,                      #
+#    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS                  #
+#    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE                 #
+#    GOODS OR SERVICES; LOSS OF USE, DATA,   OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,                      #
+#    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   #
+#############################################################################################################################################################################
+
+
+import argparse
+import hashlib
+import os
+import shutil
+import stat
+import subprocess
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+
+def sha256(path, chunk=1024 * 1024):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def extract_rootfs(iso_path, workdir, label):
+    iso_path = Path(iso_path).resolve()
+    mount_dir = Path(workdir) / "iso_mount"
+    squash_path = Path(workdir) / "filesystem.squashfs"
+    root_dir = Path(workdir) / "rootfs"
+
+    print(f"[{label}] Mounting ISO: {iso_path}")
+    mount_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["sudo", "mount", "-o", "loop", str(iso_path), str(mount_dir)], check=True)
+
+    print(f"[{label}] Looking for casper/filesystem.squashfs")
+    image_path = mount_dir / "casper" / "filesystem.squashfs"
+    if not image_path.is_file():
+        print(f"[{label}] casper/filesystem.squashfs not found, searching for filesystem.squashfs")
+        found = list(mount_dir.rglob("filesystem.squashfs"))
+        if not found:
+            subprocess.run(["sudo", "umount", str(mount_dir)], check=True)
+            raise RuntimeError("Could not find filesystem.squashfs in ISO")
+        image_path = found[0]
+
+    print(f"[{label}] Using image: {image_path}")
+    shutil.copy(image_path, squash_path)
+
+    print(f"[{label}] Unmounting ISO")
+    subprocess.run(["sudo", "umount", str(mount_dir)], check=True)
+
+    print(f"[{label}] Extracting SquashFS to {root_dir}")
+    subprocess.run(["unsquashfs", "-d", str(root_dir), str(squash_path)], check=True)
+
+    print(f"[{label}] Extraction complete")
+    return root_dir
+
+
+def detect_type(mode):
+    if stat.S_ISREG(mode):
+        return "file"
+    if stat.S_ISDIR(mode):
+        return "dir"
+    if stat.S_ISLNK(mode):
+        return "symlink"
+    if stat.S_ISCHR(mode):
+        return "char"
+    if stat.S_ISBLK(mode):
+        return "block"
+    if stat.S_ISFIFO(mode):
+        return "fifo"
+    if stat.S_ISSOCK(mode):
+        return "sock"
+    return "other"
+
+
+def index_tree(root, label):
+    root = Path(root)
+    index = {}
+    count = 0
+    print(f"[{label}] Indexing tree at {root}")
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        dirpath_p = Path(dirpath)
+        for d in dirnames:
+            p = dirpath_p / d
+            rel = str(p.relative_to(root))
+            try:
+                st = os.lstat(p)
+            except OSError:
+                continue
+            mode = st.st_mode
+            entry_type = detect_type(mode)
+            index[rel] = {
+                "type": entry_type,
+                "mode": mode & 0o7777,
+                "uid": st.st_uid,
+                "gid": st.st_gid,
+                "size": st.st_size,
+                "hash": None,
+                "link_target": None,
+                "rdev": st.st_rdev if entry_type in ("char", "block") else None,
+            }
+            if entry_type == "symlink":
+                try:
+                    index[rel]["link_target"] = os.readlink(p)
+                except OSError:
+                    index[rel]["link_target"] = None
+            count += 1
+            if count % 5000 == 0:
+                print(f"[{label}] Indexed {count} entries")
+        for name in filenames:
+            p = dirpath_p / name
+            rel = str(p.relative_to(root))
+            try:
+                st = os.lstat(p)
+            except OSError:
+                continue
+            mode = st.st_mode
+            entry_type = detect_type(mode)
+            index[rel] = {
+                "type": entry_type,
+                "mode": mode & 0o7777,
+                "uid": st.st_uid,
+                "gid": st.st_gid,
+                "size": st.st_size,
+                "hash": None,
+                "link_target": None,
+                "rdev": st.st_rdev if entry_type in ("char", "block") else None,
+            }
+            if entry_type == "symlink":
+                try:
+                    index[rel]["link_target"] = os.readlink(p)
+                except OSError:
+                    index[rel]["link_target"] = None
+            count += 1
+            if count % 5000 == 0:
+                print(f"[{label}] Indexed {count} entries")
+    print(f"[{label}] Indexing complete, total entries: {count}")
+    return index
+
+
+def compute_hashes(root, index, label):
+    root = Path(root)
+    file_paths = [rel for rel, meta in index.items() if meta["type"] == "file"]
+    total = len(file_paths)
+    if total == 0:
+        print(f"[{label}] No regular files to hash")
+        return
+
+    print(f"[{label}] Computing hashes for {total} files")
+    max_workers = os.cpu_count() or 4
+    completed = 0
+    next_report = 1
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        future_map = {}
+        for rel in file_paths:
+            full = root / rel
+            future = ex.submit(sha256, str(full))
+            future_map[future] = rel
+        for future in as_completed(future_map):
+            rel = future_map[future]
+            try:
+                index[rel]["hash"] = future.result()
+            except Exception:
+                index[rel]["hash"] = None
+            completed += 1
+            percent = int(completed * 100 / total)
+            if percent >= next_report:
+                print(f"[{label}] Hashing progress: {percent}% ({completed}/{total})")
+                next_report = percent + 5
+    print(f"[{label}] Hashing complete")
+
+
+def compare_indexes(old_idx, new_idx):
+    old_keys = set(old_idx.keys())
+    new_keys = set(new_idx.keys())
+
+    print("[COMPARE] Computing key sets")
+    old_only = sorted(old_keys - new_keys)
+    new_only = sorted(new_keys - old_keys)
+    common = sorted(old_keys & new_keys)
+
+    print(f"[COMPARE] Only in OLD: {len(old_only)}")
+    print(f"[COMPARE] Only in NEW: {len(new_only)}")
+    print(f"[COMPARE] Common entries: {len(common)}")
+
+    differing = []
+    checked = 0
+    total_common = len(common)
+    next_report = 1
+
+    print("[COMPARE] Comparing common entries")
+    for rel in common:
+        o = old_idx[rel]
+        n = new_idx[rel]
+        changed = False
+        if o["type"] != n["type"]:
+            changed = True
+        else:
+            if o["mode"] != n["mode"]:
+                changed = True
+            if o["uid"] != n["uid"] or o["gid"] != n["gid"]:
+                changed = True
+            if o["type"] == "file":
+                if o["size"] != n["size"] or o["hash"] != n["hash"]:
+                    changed = True
+            if o["type"] == "symlink":
+                if o["link_target"] != n["link_target"]:
+                    changed = True
+            if o["type"] in ("char", "block"):
+                if o["rdev"] != n["rdev"]:
+                    changed = True
+        if changed:
+            differing.append((rel, o, n))
+        checked += 1
+        percent = int(checked * 100 / total_common) if total_common else 100
+        if percent >= next_report:
+            print(f"[COMPARE] Progress: {percent}% ({checked}/{total_common})")
+            next_report = percent + 10
+
+    print(f"[COMPARE] Differing entries: {len(differing)}")
+    return old_only, new_only, differing
+
+
+def fmt_row(path, size, digest, width_path=80):
+    size_str = str(size) if size is not None else "-"
+    digest_str = digest if digest is not None else "-"
+    return f"{path:<{width_path}}  {size_str:>12}  {digest_str}"
+
+
+def fmt_meta(meta):
+    t = meta["type"]
+    mode = f"{meta['mode']:04o}"
+    uid = meta["uid"]
+    gid = meta["gid"]
+    size = meta["size"] if t == "file" else "-"
+    h = meta["hash"] if t == "file" else "-"
+    link = meta["link_target"] if t == "symlink" else "-"
+    rdev = meta["rdev"] if t in ("char", "block") else "-"
+    return t, mode, uid, gid, size, h, link, rdev
+
+
+def write_report(out_path, old_only, new_only, differing, old_idx, new_idx):
+    print(f"[REPORT] Writing report to {out_path}")
+    with open(out_path, "w", encoding="utf-8") as f:
+        def w(line=""):
+            f.write(line + "\n")
+
+        w("===== FILES ONLY IN OLD =====")
+        for rel in old_only:
+            meta = old_idx[rel]
+            size = meta["size"] if meta["type"] == "file" else "-"
+            digest = meta["hash"] if meta["type"] == "file" else "-"
+            w(fmt_row(rel, size, digest))
+        w()
+
+        w("===== FILES ONLY IN NEW =====")
+        for rel in new_only:
+            meta = new_idx[rel]
+            size = meta["size"] if meta["type"] == "file" else "-"
+            digest = meta["hash"] if meta["type"] == "file" else "-"
+            w(fmt_row(rel, size, digest))
+        w()
+
+        w("===== ENTRIES DIFFERING (type/permissions/owner/group/size/hash/link/device) =====")
+        for rel, o, n in differing:
+            ot, omode, ouid, ogid, osize, ohash, olink, ordev = fmt_meta(o)
+            nt, nmode, nuid, ngid, nsize, nhash, nlink, nrdev = fmt_meta(n)
+            w(rel)
+            w(f"    OLD: type={ot} mode={omode} uid={ouid} gid={ogid} size={osize} sha256={ohash} link={olink} rdev={ordev}")
+            w(f"    NEW: type={nt} mode={nmode} uid={nuid} gid={ngid} size={nsize} sha256={nhash} link={nlink} rdev={nrdev}")
+        w()
+    print("[REPORT] Report written")
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Compare two ISO root filesystems (paths, permissions, hashes).")
+    p.add_argument("-old", required=True, help="Path to old ISO")
+    p.add_argument("-new", required=True, help="Path to new ISO")
+    p.add_argument("-out", required=True, help="Path to output report")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    tmp_old = tempfile.mkdtemp(prefix="rfs_old_")
+    tmp_new = tempfile.mkdtemp(prefix="rfs_new_")
+
+    try:
+        print(f"[MAIN] Using temporary directories:\n       OLD: {tmp_old}\n       NEW: {tmp_new}")
+
+        old_root = extract_rootfs(args.old, tmp_old, "OLD")
+        new_root = extract_rootfs(args.new, tmp_new, "NEW")
+
+        old_idx = index_tree(old_root, "OLD")
+        new_idx = index_tree(new_root, "NEW")
+
+        compute_hashes(old_root, old_idx, "OLD")
+        compute_hashes(new_root, new_idx, "NEW")
+
+        old_only, new_only, differing = compare_indexes(old_idx, new_idx)
+
+        write_report(args.out, old_only, new_only, differing, old_idx, new_idx)
+
+        print("[MAIN] Done")
+        print(f"[MAIN] Report: {args.out}")
+    finally:
+        print("[MAIN] Cleaning up temporary directories")
+        shutil.rmtree(tmp_old, ignore_errors=True)
+        shutil.rmtree(tmp_new, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    main()
