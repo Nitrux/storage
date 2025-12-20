@@ -22,7 +22,7 @@ def compare_package_lists(list_a, list_b):
     newer_versions = {}
     only_in_b = {}
     removed_packages = {}
-    
+
     for package, version in list_b.items():
         if package in list_a:
             if version != list_a[package]:
@@ -33,7 +33,7 @@ def compare_package_lists(list_a, list_b):
     for package in list_a:
         if package not in list_b:
             removed_packages[package] = list_a[package]
-            
+
     return list(newer_versions.keys()), list(only_in_b.keys()), list(removed_packages.keys())
 
 def remove_excluded_packages(packages, exclude_list, exclude_patterns):
@@ -74,17 +74,17 @@ def main():
     if args.compare and args.out_updated and args.out_new and args.out_removed:
         list_a = load_package_list(args.compare[0])
         list_b = load_package_list(args.compare[1])
-        
+
         newer_versions, only_in_b, removed_packages = compare_package_lists(list_a, list_b)
 
         filtered_newer_versions = remove_excluded_packages(newer_versions, exclude_list, exclude_patterns)
         filtered_only_in_b = remove_excluded_packages(only_in_b, exclude_list, exclude_patterns)
         filtered_removed_packages = remove_excluded_packages(removed_packages, exclude_list, exclude_patterns)
-        
+
         save_packages_to_file(filtered_newer_versions, args.out_updated)
         save_packages_to_file(filtered_only_in_b, args.out_new)
         save_packages_to_file(filtered_removed_packages, args.out_removed)
-        
+
         print(f"Updated packages are saved to {args.out_updated}")
         print(f"Newly added packages are saved to {args.out_new}")
         print(f"Removed packages are saved to {args.out_removed}")
