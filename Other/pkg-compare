@@ -4,9 +4,11 @@
 
 import argparse
 import re
+import subprocess
+import tarfile
+
 
 def load_package_list(file_path):
-    """Load package list from a file."""
     packages = {}
     with open(file_path, 'r') as file:
         for line in file:
@@ -17,8 +19,8 @@ def load_package_list(file_path):
                 packages[package_name] = package_version
     return packages
 
+
 def compare_package_lists(list_a, list_b):
-    """Compare two package lists."""
     newer_versions = {}
     only_in_b = {}
     removed_packages = {}
@@ -36,30 +38,180 @@ def compare_package_lists(list_a, list_b):
 
     return list(newer_versions.keys()), list(only_in_b.keys()), list(removed_packages.keys())
 
+
 def remove_excluded_packages(packages, exclude_list, exclude_patterns):
-    """Remove excluded packages based on list and patterns after list creation."""
-    return [package for package in packages if package not in exclude_list and not any(re.search(pattern, package) for pattern in exclude_patterns)]
+    return [
+        package
+        for package in packages
+        if package not in exclude_list
+        and not any(re.search(pattern, package) for pattern in exclude_patterns)
+    ]
+
 
 def save_packages_to_file(packages, file_name):
-    """Save packages to a file."""
     with open(file_name, 'w') as file:
         for package in packages:
             file.write(f"{package}\n")
 
+
+def _parse_relation_names(value):
+    if not value:
+        return set()
+
+    value = value.replace('\n', ' ')
+    items = [v.strip() for v in value.split(',') if v.strip()]
+
+    pkgs = set()
+    for item in items:
+        alts = [a.strip() for a in item.split('|') if a.strip()]
+        for alt in alts:
+            name = alt.split('(')[0].strip()
+            if name:
+                pkgs.add(name)
+    return pkgs
+
+
+def parse_dpkg_status_bytes(data):
+    text = data.decode("utf-8", errors="replace")
+    stanzas = [s for s in text.split("\n\n") if s.strip()]
+    meta = {}
+
+    for stanza in stanzas:
+        current_key = None
+        fields = {}
+        for line in stanza.splitlines():
+            if not line:
+                continue
+            if line[0].isspace() and current_key:
+                fields[current_key] = fields.get(current_key, "") + "\n" + line.strip()
+                continue
+            if ":" not in line:
+                continue
+            k, v = line.split(":", 1)
+            current_key = k.strip()
+            fields[current_key] = v.lstrip()
+
+        pkg = fields.get("Package")
+        if not pkg:
+            continue
+
+        replaces = _parse_relation_names(fields.get("Replaces", ""))
+        provides = _parse_relation_names(fields.get("Provides", ""))
+
+        meta[pkg] = {"Replaces": replaces, "Provides": provides}
+
+    return meta
+
+
+def load_dpkg_metadata_from_tar(tar_path):
+    candidates = [
+        "/var/lib/dpkg/status",
+        "var/lib/dpkg/status",
+        "./var/lib/dpkg/status",
+    ]
+
+    with tarfile.open(tar_path, "r:*") as tf:
+        members = {m.name: m for m in tf.getmembers()}
+
+        status_member = None
+        for c in candidates:
+            if c in members and members[c].isfile():
+                status_member = members[c]
+                break
+
+        if status_member is None:
+            raise FileNotFoundError("Could not find /var/lib/dpkg/status in the provided TAR archive.")
+
+        f = tf.extractfile(status_member)
+        if f is None:
+            raise FileNotFoundError("Could not read /var/lib/dpkg/status from the provided TAR archive.")
+
+        data = f.read()
+        return parse_dpkg_status_bytes(data)
+
+
+def get_control_data_from_host(package_name):
+    try:
+        proc = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Replaces}\n${Provides}\n", package_name],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        lines = proc.stdout.splitlines()
+        replaces_raw = lines[0].strip() if len(lines) >= 1 else ""
+        provides_raw = lines[1].strip() if len(lines) >= 2 else ""
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        replaces_raw = ""
+        provides_raw = ""
+
+    return {"Replaces": _parse_relation_names(replaces_raw), "Provides": _parse_relation_names(provides_raw)}
+
+
+def build_transition_index_for_b(list_b, dpkg_meta_b):
+    replaces_index = {}
+    provides_index = {}
+
+    for pkg in list_b.keys():
+        if dpkg_meta_b is not None:
+            md = dpkg_meta_b.get(pkg, {"Replaces": set(), "Provides": set()})
+        else:
+            md = get_control_data_from_host(pkg)
+
+        for r in md.get("Replaces", set()):
+            replaces_index.setdefault(r, set()).add(pkg)
+
+        for p in md.get("Provides", set()):
+            provides_index.setdefault(p, set()).add(pkg)
+
+    return replaces_index, provides_index
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Compare two dpkg package lists.", formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("-c", "--compare", nargs=2, metavar=('list1.txt', 'list2.txt'), help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt.")
-    parser.add_argument("-u", "--out-updated", metavar="update_list.txt", help="File name for saving packages with newer versions.")
-    parser.add_argument("-n", "--out-new", metavar="new_list.txt", help="File name for saving packages only in the second list.")
-    parser.add_argument("-r", "--out-removed", metavar="removed_list.txt", help="File name for saving packages removed from the second list.")
+    parser = argparse.ArgumentParser(
+        description="Compare two dpkg package lists.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "-c", "--compare",
+        nargs=2,
+        metavar=('list1.txt', 'list2.txt'),
+        help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt."
+    )
+    parser.add_argument(
+        "-u", "--out-updated",
+        metavar="update_list.txt",
+        help="File name for saving packages with newer versions."
+    )
+    parser.add_argument(
+        "-n", "--out-new",
+        metavar="new_list.txt",
+        help="File name for saving packages only in the second list."
+    )
+    parser.add_argument(
+        "-r", "--out-removed",
+        metavar="removed_list.txt",
+        help="File name for saving packages removed from the second list."
+    )
+    parser.add_argument(
+        "--dpkg-db-a",
+        metavar="var-lib-dpkg-a.tar.xz",
+        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list A."
+    )
+    parser.add_argument(
+        "--dpkg-db-b",
+        metavar="var-lib-dpkg-b.tar.xz",
+        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list B."
+    )
 
     args = parser.parse_args()
 
     exclude_list = [
-        'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64', 
-        'apt-transport-https', 'linux-image-liquorix-amd64', 'libstdc++-13-dev', 
-        'libstdc++6', 'casper', 'calamares', 'calamares-qml-settings-nitrux', 
-        'initramfs-tools', 'initramfs-tools-bin', 'initramfs-tools-core', 
+        'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64',
+        'apt-transport-https', 'linux-image-liquorix-amd64', 'libstdc++-13-dev',
+        'libstdc++6', 'casper', 'calamares', 'calamares-qml-settings-nitrux',
+        'initramfs-tools', 'initramfs-tools-bin', 'initramfs-tools-core',
         'dpkg-dev', 'libsysprof-capture-4-dev', 'libegl-mesa0', 'libgbm1', 'libgl1-mesa-dri',
         'libglapi-mesa', 'libglx-mesa0', 'libxatracker2', 'mesa-libgallium', 'mesa-va-drivers',
         'mesa-vdpau-drivers', 'mesa-vulkan-drivers', 'mauikit3-git', 'maui-manager3',
@@ -77,9 +229,21 @@ def main():
 
         newer_versions, only_in_b, removed_packages = compare_package_lists(list_a, list_b)
 
+        dpkg_meta_b = None
+        if args.dpkg_db_b:
+            dpkg_meta_b = load_dpkg_metadata_from_tar(args.dpkg_db_b)
+
+        replaces_index, provides_index = build_transition_index_for_b(list_b, dpkg_meta_b)
+
+        real_removals = []
+        for removed_pkg in removed_packages:
+            if removed_pkg in replaces_index or removed_pkg in provides_index:
+                continue
+            real_removals.append(removed_pkg)
+
         filtered_newer_versions = remove_excluded_packages(newer_versions, exclude_list, exclude_patterns)
         filtered_only_in_b = remove_excluded_packages(only_in_b, exclude_list, exclude_patterns)
-        filtered_removed_packages = remove_excluded_packages(removed_packages, exclude_list, exclude_patterns)
+        filtered_removed_packages = remove_excluded_packages(real_removals, exclude_list, exclude_patterns)
 
         save_packages_to_file(filtered_newer_versions, args.out_updated)
         save_packages_to_file(filtered_only_in_b, args.out_new)
@@ -90,6 +254,7 @@ def main():
         print(f"Removed packages are saved to {args.out_removed}")
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()
