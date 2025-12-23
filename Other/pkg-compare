@@ -214,12 +214,7 @@ def main():
         'casper',
         'initramfs-tools',
         'initramfs-tools-bin',
-        'initramfs-tools-core',
-        'libglx-mesa0',
-        'libxatracker2',
-        'zlib1g',
-        'zlib1g-dev',
-        'mount'
+        'initramfs-tools-core'
     ]
 
     exclude_patterns = [
