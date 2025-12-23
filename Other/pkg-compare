@@ -215,7 +215,7 @@ def main():
     ]
 
     exclude_patterns = [
-        r'nvidia',
+        r'nvidia'
     ]
 
     if args.compare and args.out_updated and args.out_new and args.out_removed:
