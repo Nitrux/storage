@@ -211,10 +211,7 @@ def main():
         'apt-transport-https',
         'calamares',
         'calamares-qml-settings-nitrux',
-        'casper',
-        'initramfs-tools',
-        'initramfs-tools-bin',
-        'initramfs-tools-core'
+        'casper'
     ]
 
     exclude_patterns = [
