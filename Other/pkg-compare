@@ -223,8 +223,6 @@ def main():
     ]
 
     exclude_patterns = [
-        r'mesa',
-        r'libstdc++.*-\d+',
         r'libnvidia-.*-\d+',
         r'nvidia-.*-\d+',
         r'xserver-xorg-video-nvidia-\d+'
