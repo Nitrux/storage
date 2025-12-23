@@ -208,16 +208,23 @@ def main():
     args = parser.parse_args()
 
     exclude_list = [
-        'mount', 'zlib1g', 'zlib1g-dev', 'linux-headers-liquorix-amd64',
-        'apt-transport-https', 'linux-image-liquorix-amd64', 'libstdc++-13-dev',
-        'libstdc++6', 'casper', 'calamares', 'calamares-qml-settings-nitrux',
-        'initramfs-tools', 'initramfs-tools-bin', 'initramfs-tools-core',
-        'dpkg-dev', 'libsysprof-capture-4-dev', 'libegl-mesa0', 'libgbm1', 'libgl1-mesa-dri',
-        'libglapi-mesa', 'libglx-mesa0', 'libxatracker2', 'mesa-libgallium', 'mesa-va-drivers',
-        'mesa-vdpau-drivers', 'mesa-vulkan-drivers', 'mauikit3-git', 'maui-manager3',
+        'apt-transport-https',
+        'calamares',
+        'calamares-qml-settings-nitrux',
+        'casper',
+        'initramfs-tools',
+        'initramfs-tools-bin',
+        'initramfs-tools-core',
+        'libglx-mesa0',
+        'libxatracker2',
+        'zlib1g',
+        'zlib1g-dev',
+        'mount'
     ]
 
     exclude_patterns = [
+        r'mesa',
+        r'libstdc++.*-\d+',
         r'libnvidia-.*-\d+',
         r'nvidia-.*-\d+',
         r'xserver-xorg-video-nvidia-\d+'
