@@ -215,9 +215,7 @@ def main():
     ]
 
     exclude_patterns = [
-        r'libnvidia-.*-\d+',
-        r'nvidia-.*-\d+',
-        r'xserver-xorg-video-nvidia-\d+'
+        r'nvidia',
     ]
 
     if args.compare and args.out_updated and args.out_new and args.out_removed:
