@@ -3,8 +3,10 @@
 # Copyright <2025> <Uri Herrera <uri_herrera@nxos.org>>
 
 import argparse
+import os
 import re
 import subprocess
+import sys
 import tarfile
 
 
@@ -104,30 +106,42 @@ def parse_dpkg_status_bytes(data):
 
 
 def load_dpkg_metadata_from_tar(tar_path):
+    if not os.path.exists(tar_path):
+        print(f"Error: The archive '{tar_path}' does not exist.")
+        sys.exit(1)
+
     candidates = [
         "/var/lib/dpkg/status",
         "var/lib/dpkg/status",
         "./var/lib/dpkg/status",
     ]
 
-    with tarfile.open(tar_path, "r:*") as tf:
-        members = {m.name: m for m in tf.getmembers()}
+    try:
+        with tarfile.open(tar_path, "r:*") as tf:
+            members = {m.name: m for m in tf.getmembers()}
 
-        status_member = None
-        for c in candidates:
-            if c in members and members[c].isfile():
-                status_member = members[c]
-                break
+            status_member = None
+            for c in candidates:
+                if c in members and members[c].isfile():
+                    status_member = members[c]
+                    break
 
-        if status_member is None:
-            raise FileNotFoundError("Could not find /var/lib/dpkg/status in the provided TAR archive.")
+            if status_member is None:
+                # Use sys.exit for cleaner termination
+                print(f"Error: Could not find /var/lib/dpkg/status in '{tar_path}'.")
+                sys.exit(1)
 
-        f = tf.extractfile(status_member)
-        if f is None:
-            raise FileNotFoundError("Could not read /var/lib/dpkg/status from the provided TAR archive.")
+            f = tf.extractfile(status_member)
+            if f is None:
+                print(f"Error: Could not read /var/lib/dpkg/status from '{tar_path}'.")
+                sys.exit(1)
 
-        data = f.read()
-        return parse_dpkg_status_bytes(data)
+            data = f.read()
+            return parse_dpkg_status_bytes(data)
+
+    except tarfile.ReadError:
+        print(f"Error: '{tar_path}' is not a valid tar archive.")
+        sys.exit(1)
 
 
 def get_control_data_from_host(package_name):
