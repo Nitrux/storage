@@ -11,14 +11,28 @@ import tarfile
 
 
 def load_package_list(file_path):
+    if not os.path.exists(file_path):
+        print(f"Error: The package list file '{file_path}' does not exist.")
+        sys.exit(1)
+
     packages = {}
-    with open(file_path, 'r') as file:
-        for line in file:
-            if line.startswith('ii'):
-                parts = line.split()
-                package_name = parts[1].replace(':amd64', '')
-                package_version = parts[2]
-                packages[package_name] = package_version
+    try:
+        with open(file_path, 'r') as file:
+            for line in file:
+                if line.startswith('ii'):
+                    parts = line.split()
+                    # Ensure the line has enough parts to avoid IndexError
+                    if len(parts) >= 3:
+                        package_name = parts[1].replace(':amd64', '')
+                        package_version = parts[2]
+                        packages[package_name] = package_version
+    except PermissionError:
+        print(f"Error: Permission denied reading '{file_path}'.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading '{file_path}': {e}")
+        sys.exit(1)
+        
     return packages
 
 
