@@ -25,13 +25,13 @@ def list_iommu_groups():
     if not os.path.exists(iommu_path):
         print("IOMMU groups not found. Ensure IOMMU is enabled in the BIOS and kernel parameters.")
         return
-    
+
     groups = sorted([d for d in os.listdir(iommu_path) if d.isdigit()], key=int)
-    
+
     for group in groups:
         group_path = os.path.join(iommu_path, group, "devices")
         devices = sorted(glob.glob(f"{group_path}/*"))
-        
+
         print(f"IOMMU Group {group}:")
         for i, device in enumerate(devices):
             if os.path.islink(device):
