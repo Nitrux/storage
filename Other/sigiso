@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright <2025> <Uri Herrera <uri_herrera@nxos.org>>#########################################################################################################################################################################
+# Copyright <2025> <Uri Herrera <uri_herrera@nxos.org>>
 
 import os
 import argparse
