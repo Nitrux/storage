@@ -261,7 +261,10 @@ def get_control_data_from_host(package_name):
         replaces_raw = ""
         provides_raw = ""
 
-    return {"Replaces": _parse_relation_names(replaces_raw), "Provides": _parse_relation_names(provides_raw)}
+    return {
+        "Replaces": _parse_relation_names(replaces_raw),
+        "Provides": _parse_relation_names(provides_raw),
+    }
 
 
 def build_transition_index_for_b(list_b, dpkg_meta_b):
@@ -314,7 +317,8 @@ def main():
         "--compare",
         nargs=2,
         metavar=("list1.txt", "list2.txt"),
-        help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt.",
+        help="Paths to the package lists to compare, i.e., "
+             "old_list1.txt new_list2.txt.",
     )
     parser.add_argument(
         "-u",
@@ -337,12 +341,18 @@ def main():
     parser.add_argument(
         "--dpkg-db-a",
         metavar="var-lib-dpkg-a.tar.xz",
-        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list A.",
+        help=(
+            "TAR archive containing /var/lib/dpkg from the rootfs snapshot "
+            "used to generate list A."
+        ),
     )
     parser.add_argument(
         "--dpkg-db-b",
         metavar="var-lib-dpkg-b.tar.xz",
-        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list B.",
+        help=(
+            "TAR archive containing /var/lib/dpkg from the rootfs snapshot "
+            "used to generate list B."
+        ),
     )
 
     args = parser.parse_args()
@@ -363,13 +373,19 @@ def main():
         list_a = load_package_list(args.compare[0])
         list_b = load_package_list(args.compare[1])
 
-        newer_versions, only_in_b, removed_packages = compare_package_lists(list_a, list_b)
+        newer_versions, only_in_b, removed_packages = compare_package_lists(
+            list_a,
+            list_b,
+        )
 
         dpkg_meta_b = None
         if args.dpkg_db_b:
             dpkg_meta_b = load_dpkg_metadata_from_tar(args.dpkg_db_b)
 
-        replaces_index, provides_index = build_transition_index_for_b(list_b, dpkg_meta_b)
+        replaces_index, provides_index = build_transition_index_for_b(
+            list_b,
+            dpkg_meta_b,
+        )
 
         real_removals = []
         for removed_pkg in removed_packages:
@@ -377,9 +393,21 @@ def main():
                 continue
             real_removals.append(removed_pkg)
 
-        filtered_newer_versions = remove_excluded_packages(newer_versions, exclude_list, exclude_patterns)
-        filtered_only_in_b = remove_excluded_packages(only_in_b, exclude_list, exclude_patterns)
-        filtered_removed_packages = remove_excluded_packages(real_removals, exclude_list, exclude_patterns)
+        filtered_newer_versions = remove_excluded_packages(
+            newer_versions,
+            exclude_list,
+            exclude_patterns,
+        )
+        filtered_only_in_b = remove_excluded_packages(
+            only_in_b,
+            exclude_list,
+            exclude_patterns,
+        )
+        filtered_removed_packages = remove_excluded_packages(
+            real_removals,
+            exclude_list,
+            exclude_patterns,
+        )
 
         save_packages_to_file(filtered_newer_versions, args.out_updated)
         save_packages_to_file(filtered_only_in_b, args.out_new)
