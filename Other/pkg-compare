@@ -78,7 +78,11 @@ def compare_package_lists(list_a, list_b):
         if package not in list_b:
             removed_packages[package] = list_a[package]
 
-    return list(newer_versions.keys()), list(only_in_b.keys()), list(removed_packages.keys())
+    return (
+        list(newer_versions.keys()),
+        list(only_in_b.keys()),
+        list(removed_packages.keys()),
+    )
 
 
 def remove_excluded_packages(packages, exclude_list, exclude_patterns):
@@ -109,7 +113,7 @@ def save_packages_to_file(packages, file_name):
         file_name: Path to the output file.
     """
     with open(file_name, "w", encoding="utf-8") as file:
-        for package in packages:
+        for package in sorted(set(packages)):
             file.write(f"{package}\n")
 
 
@@ -166,7 +170,9 @@ def parse_dpkg_status_bytes(data):
             if not line:
                 continue
             if line[0].isspace() and current_key:
-                fields[current_key] = fields.get(current_key, "") + "\n" + line.strip()
+                fields[current_key] = (
+                    fields.get(current_key, "") + "\n" + line.strip()
+                )
                 continue
             if ":" not in line:
                 continue
@@ -220,12 +226,18 @@ def load_dpkg_metadata_from_tar(tar_path):
                     break
 
             if status_member is None:
-                print(f"Error: Could not find /var/lib/dpkg/status in '{tar_path}'.")
+                print(
+                    "Error: Could not find /var/lib/dpkg/status in "
+                    f"'{tar_path}'."
+                )
                 sys.exit(1)
 
             f = tf.extractfile(status_member)
             if f is None:
-                print(f"Error: Could not read /var/lib/dpkg/status from '{tar_path}'.")
+                print(
+                    "Error: Could not read /var/lib/dpkg/status from "
+                    f"'{tar_path}'."
+                )
                 sys.exit(1)
 
             data = f.read()
@@ -301,6 +313,44 @@ def build_transition_index_for_b(list_b, dpkg_meta_b):
     return replaces_index, provides_index
 
 
+def classify_nvidia_packages(packages, dpkg_meta, patterns):
+    """Return packages related to NVIDIA by name or Replaces/Provides metadata.
+
+    Args:
+        packages: Iterable of package names to classify.
+        dpkg_meta: Optional dict of dpkg metadata (Replaces/Provides) for the
+            packages, or None to query the host via dpkg for each package.
+        patterns: Iterable of regex patterns marking "NVIDIA-related" names.
+
+    Returns:
+        Sorted list of NVIDIA-related package names.
+    """
+    result = set()
+    for pkg in packages:
+        is_nv = any(re.search(pattern, pkg) for pattern in patterns)
+
+        if not is_nv:
+            if dpkg_meta is not None:
+                meta = dpkg_meta.get(pkg, {"Replaces": set(), "Provides": set()})
+            else:
+                meta = get_control_data_from_host(pkg)
+
+            names = set()
+            names.update(meta.get("Replaces", set()))
+            names.update(meta.get("Provides", set()))
+            if any(
+                re.search(pattern, name)
+                for pattern in patterns
+                for name in names
+            ):
+                is_nv = True
+
+        if is_nv:
+            result.add(pkg)
+
+    return sorted(result)
+
+
 def main():
     """Entry point for the pkg-compare CLI.
 
@@ -354,6 +404,27 @@ def main():
             "used to generate list B."
         ),
     )
+    parser.add_argument(
+        "--nv-new",
+        metavar="nv_new_list.txt",
+        help=(
+            "File name for saving NVIDIA-related packages only in the "
+            "second list."
+        ),
+    )
+    parser.add_argument(
+        "--nv-update",
+        metavar="nv_updated_list.txt",
+        help="File name for saving NVIDIA-related packages with newer versions.",
+    )
+    parser.add_argument(
+        "--nv-remove",
+        metavar="nv_removed_list.txt",
+        help=(
+            "File name for saving NVIDIA-related packages removed from the "
+            "second list."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -369,6 +440,10 @@ def main():
         r"systemd",
     ]
 
+    nvidia_patterns = [
+        r"nvidia",
+    ]
+
     if args.compare and args.out_updated and args.out_new and args.out_removed:
         list_a = load_package_list(args.compare[0])
         list_b = load_package_list(args.compare[1])
@@ -378,7 +453,11 @@ def main():
             list_b,
         )
 
+        dpkg_meta_a = None
         dpkg_meta_b = None
+
+        if args.dpkg_db_a:
+            dpkg_meta_a = load_dpkg_metadata_from_tar(args.dpkg_db_a)
         if args.dpkg_db_b:
             dpkg_meta_b = load_dpkg_metadata_from_tar(args.dpkg_db_b)
 
@@ -392,6 +471,42 @@ def main():
             if removed_pkg in replaces_index or removed_pkg in provides_index:
                 continue
             real_removals.append(removed_pkg)
+
+        if args.nv_update:
+            nv_updated = classify_nvidia_packages(
+                newer_versions,
+                dpkg_meta_b,
+                nvidia_patterns,
+            )
+            save_packages_to_file(nv_updated, args.nv_update)
+            print(
+                "NVIDIA-related updated packages are saved to "
+                f"{args.nv_update}"
+            )
+
+        if args.nv_new:
+            nv_new = classify_nvidia_packages(
+                only_in_b,
+                dpkg_meta_b,
+                nvidia_patterns,
+            )
+            save_packages_to_file(nv_new, args.nv_new)
+            print(
+                "NVIDIA-related new packages are saved to "
+                f"{args.nv_new}"
+            )
+
+        if args.nv_remove:
+            nv_removed = classify_nvidia_packages(
+                real_removals,
+                dpkg_meta_a,
+                nvidia_patterns,
+            )
+            save_packages_to_file(nv_removed, args.nv_remove)
+            print(
+                "NVIDIA-related removed packages are saved to "
+                f"{args.nv_remove}"
+            )
 
         filtered_newer_versions = remove_excluded_packages(
             newer_versions,
