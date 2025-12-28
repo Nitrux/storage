@@ -14,6 +14,15 @@ from pathlib import Path
 
 
 def sha256(path, chunk=1024 * 1024):
+    """Compute the SHA-256 digest of a file.
+
+    Args:
+        path: Path to the file.
+        chunk: Chunk size in bytes to read incrementally.
+
+    Returns:
+        Hex-encoded SHA-256 digest string.
+    """
     h = hashlib.sha256()
     with open(path, "rb") as f:
         while True:
@@ -25,6 +34,19 @@ def sha256(path, chunk=1024 * 1024):
 
 
 def extract_rootfs(iso_path, workdir, label):
+    """Mount an ISO, locate its SquashFS, extract it, and return the root path.
+
+    Args:
+        iso_path: Path to the ISO file.
+        workdir: Working directory for mount and extraction.
+        label: Label used for log output context.
+
+    Returns:
+        Path to the extracted root filesystem directory.
+
+    Raises:
+        RuntimeError: If the SquashFS image cannot be located in the ISO.
+    """
     iso_path = Path(iso_path).resolve()
     mount_dir = Path(workdir) / "iso_mount"
     squash_path = Path(workdir) / "filesystem.squashfs"
@@ -32,12 +54,14 @@ def extract_rootfs(iso_path, workdir, label):
 
     print(f"[{label}] Mounting ISO: {iso_path}")
     mount_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["sudo", "mount", "-o", "loop", str(iso_path), str(mount_dir)], check=True)
+    subprocess.run(["sudo", "mount", "-o", "loop",
+                    str(iso_path), str(mount_dir)], check=True)
 
     print(f"[{label}] Looking for casper/filesystem.squashfs")
     image_path = mount_dir / "casper" / "filesystem.squashfs"
     if not image_path.is_file():
-        print(f"[{label}] casper/filesystem.squashfs not found, searching for filesystem.squashfs")
+        print(f"[{label}] casper/filesystem.squashfs not found, "
+              "searching for filesystem.squashfs")
         found = list(mount_dir.rglob("filesystem.squashfs"))
         if not found:
             subprocess.run(["sudo", "umount", str(mount_dir)], check=True)
@@ -51,13 +75,15 @@ def extract_rootfs(iso_path, workdir, label):
     subprocess.run(["sudo", "umount", str(mount_dir)], check=True)
 
     print(f"[{label}] Extracting SquashFS to {root_dir}")
-    subprocess.run(["unsquashfs", "-d", str(root_dir), str(squash_path)], check=True)
+    subprocess.run(["unsquashfs", "-d", str(root_dir),
+                    str(squash_path)], check=True)
 
     print(f"[{label}] Extraction complete")
     return root_dir
 
 
 def detect_type(mode):
+    """Return a human-readable file type name from a stat mode bitfield."""
     if stat.S_ISREG(mode):
         return "file"
     if stat.S_ISDIR(mode):
@@ -76,12 +102,25 @@ def detect_type(mode):
 
 
 def index_tree(root, label):
+    """Walk a filesystem tree and build a metadata index.
+
+    Args:
+        root: Path to the root directory of the filesystem.
+        label: Label used for log output context.
+
+    Returns:
+        Dict keyed by relative path containing metadata fields:
+        type, mode, uid, gid, size, hash, link_target, rdev.
+    """
     root = Path(root)
     index = {}
     count = 0
     print(f"[{label}] Indexing tree at {root}")
-    for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+    for dirpath, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
         dirpath_p = Path(dirpath)
+
         for d in dirnames:
             p = dirpath_p / d
             rel = str(p.relative_to(root))
@@ -109,6 +148,7 @@ def index_tree(root, label):
             count += 1
             if count % 5000 == 0:
                 print(f"[{label}] Indexed {count} entries")
+
         for name in filenames:
             p = dirpath_p / name
             rel = str(p.relative_to(root))
@@ -141,8 +181,16 @@ def index_tree(root, label):
 
 
 def compute_hashes(root, index, label):
+    """Compute SHA-256 hashes for all regular files in the index.
+
+    Args:
+        root: Root filesystem directory.
+        index: Metadata index dict to update in place.
+        label: Label used for log output context.
+    """
     root = Path(root)
-    file_paths = [rel for rel, meta in index.items() if meta["type"] == "file"]
+    file_paths = [rel for rel, meta in index.items()
+                  if meta["type"] == "file"]
     total = len(file_paths)
     if total == 0:
         print(f"[{label}] No regular files to hash")
@@ -168,12 +216,25 @@ def compute_hashes(root, index, label):
             completed += 1
             percent = int(completed * 100 / total)
             if percent >= next_report:
-                print(f"[{label}] Hashing progress: {percent}% ({completed}/{total})")
+                print(f"[{label}] Hashing progress: "
+                      f"{percent}% ({completed}/{total})")
                 next_report = percent + 5
     print(f"[{label}] Hashing complete")
 
 
 def compare_indexes(old_idx, new_idx):
+    """Compare two filesystem indexes and identify differences.
+
+    Args:
+        old_idx: Metadata index for the old rootfs.
+        new_idx: Metadata index for the new rootfs.
+
+    Returns:
+        Tuple of:
+            list of paths only in old,
+            list of paths only in new,
+            list of tuples (path, old_meta, new_meta) for differing entries.
+    """
     old_keys = set(old_idx.keys())
     new_keys = set(new_idx.keys())
 
@@ -217,7 +278,8 @@ def compare_indexes(old_idx, new_idx):
         checked += 1
         percent = int(checked * 100 / total_common) if total_common else 100
         if percent >= next_report:
-            print(f"[COMPARE] Progress: {percent}% ({checked}/{total_common})")
+            print(f"[COMPARE] Progress: {percent}% "
+                  f"({checked}/{total_common})")
             next_report = percent + 10
 
     print(f"[COMPARE] Differing entries: {len(differing)}")
@@ -225,12 +287,14 @@ def compare_indexes(old_idx, new_idx):
 
 
 def fmt_row(path, size, digest, width_path=80):
+    """Format a row for the report containing path, size and digest."""
     size_str = str(size) if size is not None else "-"
     digest_str = digest if digest is not None else "-"
     return f"{path:<{width_path}}  {size_str:>12}  {digest_str}"
 
 
 def fmt_meta(meta):
+    """Extract printable metadata fields from an index entry."""
     t = meta["type"]
     mode = f"{meta['mode']:04o}"
     uid = meta["uid"]
@@ -243,6 +307,7 @@ def fmt_meta(meta):
 
 
 def write_report(out_path, old_only, new_only, differing, old_idx, new_idx):
+    """Write a human-readable comparison report to a file."""
     print(f"[REPORT] Writing report to {out_path}")
     with open(out_path, "w", encoding="utf-8") as f:
         def w(line=""):
@@ -264,19 +329,26 @@ def write_report(out_path, old_only, new_only, differing, old_idx, new_idx):
             w(fmt_row(rel, size, digest))
         w()
 
-        w("===== ENTRIES DIFFERING (type/permissions/owner/group/size/hash/link/device) =====")
+        w("===== ENTRIES DIFFERING "
+          "(type/permissions/owner/group/size/hash/link/device) =====")
         for rel, o, n in differing:
             ot, omode, ouid, ogid, osize, ohash, olink, ordev = fmt_meta(o)
             nt, nmode, nuid, ngid, nsize, nhash, nlink, nrdev = fmt_meta(n)
             w(rel)
-            w(f"    OLD: type={ot} mode={omode} uid={ouid} gid={ogid} size={osize} sha256={ohash} link={olink} rdev={ordev}")
-            w(f"    NEW: type={nt} mode={nmode} uid={nuid} gid={ngid} size={nsize} sha256={nhash} link={nlink} rdev={nrdev}")
+            w(f"    OLD: type={ot} mode={omode} uid={ouid} gid={ogid} "
+              f"size={osize} sha256={ohash} link={olink} rdev={ordev}")
+            w(f"    NEW: type={nt} mode={nmode} uid={nuid} gid={ngid} "
+              f"size={nsize} sha256={nhash} link={nlink} rdev={nrdev}")
         w()
     print("[REPORT] Report written")
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Compare two ISO root filesystems (paths, permissions, hashes).")
+    """Parse command-line arguments."""
+    p = argparse.ArgumentParser(
+        description="Compare two ISO root filesystems "
+                    "(paths, permissions, hashes)."
+    )
     p.add_argument("-old", required=True, help="Path to old ISO")
     p.add_argument("-new", required=True, help="Path to new ISO")
     p.add_argument("-out", required=True, help="Path to output report")
@@ -284,12 +356,15 @@ def parse_args():
 
 
 def main():
+    """Orchestrate ISO extraction, indexing, comparison and reporting."""
     args = parse_args()
     tmp_old = tempfile.mkdtemp(prefix="rfs_old_")
     tmp_new = tempfile.mkdtemp(prefix="rfs_new_")
 
     try:
-        print(f"[MAIN] Using temporary directories:\n       OLD: {tmp_old}\n       NEW: {tmp_new}")
+        print(f"[MAIN] Using temporary directories:\n"
+              f"       OLD: {tmp_old}\n"
+              f"       NEW: {tmp_new}")
 
         old_root = extract_rootfs(args.old, tmp_old, "OLD")
         new_root = extract_rootfs(args.new, tmp_new, "NEW")
@@ -300,9 +375,13 @@ def main():
         compute_hashes(old_root, old_idx, "OLD")
         compute_hashes(new_root, new_idx, "NEW")
 
-        old_only, new_only, differing = compare_indexes(old_idx, new_idx)
+        old_only, new_only, differing = compare_indexes(
+            old_idx,
+            new_idx,
+        )
 
-        write_report(args.out, old_only, new_only, differing, old_idx, new_idx)
+        write_report(args.out, old_only, new_only,
+                     differing, old_idx, new_idx)
 
         print("[MAIN] Done")
         print(f"[MAIN] Report: {args.out}")
