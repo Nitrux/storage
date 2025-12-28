@@ -11,19 +11,33 @@ import tarfile
 
 
 def load_package_list(file_path):
+    """Load a dpkg-style package list file into a name→version mapping.
+
+    The function expects the input file to contain lines like the output of
+    `dpkg -l`, and only processes lines that start with ``ii``.
+
+    Args:
+        file_path: Path to the text file containing the package list.
+
+    Returns:
+        A dict mapping package names (without architecture suffix) to version
+        strings.
+
+    Raises:
+        SystemExit: If the file does not exist or cannot be read.
+    """
     if not os.path.exists(file_path):
         print(f"Error: The package list file '{file_path}' does not exist.")
         sys.exit(1)
 
     packages = {}
     try:
-        with open(file_path, 'r') as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             for line in file:
-                if line.startswith('ii'):
+                if line.startswith("ii"):
                     parts = line.split()
-                    # Ensure the line has enough parts to avoid IndexError
                     if len(parts) >= 3:
-                        package_name = parts[1].replace(':amd64', '')
+                        package_name = parts[1].replace(":amd64", "")
                         package_version = parts[2]
                         packages[package_name] = package_version
     except PermissionError:
@@ -32,11 +46,23 @@ def load_package_list(file_path):
     except Exception as e:
         print(f"Error reading '{file_path}': {e}")
         sys.exit(1)
-        
+
     return packages
 
 
 def compare_package_lists(list_a, list_b):
+    """Compare two package lists and classify version changes and presence.
+
+    Args:
+        list_a: Dict mapping package names to versions for the reference list.
+        list_b: Dict mapping package names to versions for the comparison list.
+
+    Returns:
+        A tuple of three lists:
+            - Packages present in both lists with a different version in list_b.
+            - Packages only present in list_b.
+            - Packages present in list_a but not in list_b.
+    """
     newer_versions = {}
     only_in_b = {}
     removed_packages = {}
@@ -56,6 +82,17 @@ def compare_package_lists(list_a, list_b):
 
 
 def remove_excluded_packages(packages, exclude_list, exclude_patterns):
+    """Filter out packages that match explicit names or regex patterns.
+
+    Args:
+        packages: Iterable of package names to filter.
+        exclude_list: Iterable of package names to exclude directly.
+        exclude_patterns: Iterable of regular expression patterns; any package
+            whose name matches at least one of these patterns is excluded.
+
+    Returns:
+        A list containing only packages that are not excluded.
+    """
     return [
         package
         for package in packages
@@ -65,29 +102,59 @@ def remove_excluded_packages(packages, exclude_list, exclude_patterns):
 
 
 def save_packages_to_file(packages, file_name):
-    with open(file_name, 'w') as file:
+    """Write a package list to a file, one package per line.
+
+    Args:
+        packages: Iterable of package names to write.
+        file_name: Path to the output file.
+    """
+    with open(file_name, "w", encoding="utf-8") as file:
         for package in packages:
             file.write(f"{package}\n")
 
 
 def _parse_relation_names(value):
+    """Parse a Debian relation field into a set of package names.
+
+    This processes fields such as ``Replaces`` or ``Provides``, handling
+    comma-separated entries and ``|``-separated alternatives, stripping
+    version constraints.
+
+    Args:
+        value: Raw string value of a relation field.
+
+    Returns:
+        A set of package names extracted from the relation field.
+    """
     if not value:
         return set()
 
-    value = value.replace('\n', ' ')
-    items = [v.strip() for v in value.split(',') if v.strip()]
+    value = value.replace("\n", " ")
+    items = [v.strip() for v in value.split(",") if v.strip()]
 
     pkgs = set()
     for item in items:
-        alts = [a.strip() for a in item.split('|') if a.strip()]
+        alts = [a.strip() for a in item.split("|") if a.strip()]
         for alt in alts:
-            name = alt.split('(')[0].strip()
+            name = alt.split("(", maxsplit=1)[0].strip()
             if name:
                 pkgs.add(name)
     return pkgs
 
 
 def parse_dpkg_status_bytes(data):
+    """Parse the contents of a dpkg status file into metadata for each package.
+
+    The function extracts only the ``Package``, ``Replaces``, and ``Provides``
+    fields from each stanza.
+
+    Args:
+        data: Raw byte string containing the contents of ``/var/lib/dpkg/status``.
+
+    Returns:
+        A dict mapping package names to a dict with keys ``Replaces`` and
+        ``Provides``, each containing a set of package names.
+    """
     text = data.decode("utf-8", errors="replace")
     stanzas = [s for s in text.split("\n\n") if s.strip()]
     meta = {}
@@ -120,6 +187,18 @@ def parse_dpkg_status_bytes(data):
 
 
 def load_dpkg_metadata_from_tar(tar_path):
+    """Load dpkg status metadata from a tar archive containing /var/lib/dpkg.
+
+    Args:
+        tar_path: Path to the tar archive that holds the dpkg database.
+
+    Returns:
+        A dict in the same format as returned by ``parse_dpkg_status_bytes``.
+
+    Raises:
+        SystemExit: If the archive does not exist, is invalid, or does not
+            contain the expected status file.
+    """
     if not os.path.exists(tar_path):
         print(f"Error: The archive '{tar_path}' does not exist.")
         sys.exit(1)
@@ -141,7 +220,6 @@ def load_dpkg_metadata_from_tar(tar_path):
                     break
 
             if status_member is None:
-                # Use sys.exit for cleaner termination
                 print(f"Error: Could not find /var/lib/dpkg/status in '{tar_path}'.")
                 sys.exit(1)
 
@@ -159,6 +237,15 @@ def load_dpkg_metadata_from_tar(tar_path):
 
 
 def get_control_data_from_host(package_name):
+    """Query dpkg on the host for Replaces/Provides metadata of a package.
+
+    Args:
+        package_name: Name of the package to query with ``dpkg-query``.
+
+    Returns:
+        A dict with keys ``Replaces`` and ``Provides``, each mapped to a set
+        of package names. If the query fails, both sets are empty.
+    """
     try:
         proc = subprocess.run(
             ["dpkg-query", "-W", "-f=${Replaces}\n${Provides}\n", package_name],
@@ -178,6 +265,21 @@ def get_control_data_from_host(package_name):
 
 
 def build_transition_index_for_b(list_b, dpkg_meta_b):
+    """Build reverse indexes of Replaces/Provides transitions for list B.
+
+    The indexes map package names that are being replaced or provided to
+    the packages in list B that perform those actions.
+
+    Args:
+        list_b: Dict mapping package names to versions for list B.
+        dpkg_meta_b: Optional dict with dpkg metadata for list B packages,
+            as produced by ``load_dpkg_metadata_from_tar``. If ``None``,
+            metadata is queried from the host using ``dpkg-query``.
+
+    Returns:
+        A tuple ``(replaces_index, provides_index)`` where each index maps a
+        package name to a set of package names from list B.
+    """
     replaces_index = {}
     provides_index = {}
 
@@ -197,54 +299,64 @@ def build_transition_index_for_b(list_b, dpkg_meta_b):
 
 
 def main():
+    """Entry point for the pkg-compare CLI.
+
+    Parses command-line arguments, loads the two package lists, evaluates
+    updated, new, and removed packages, applies transition and exclusion
+    rules, and writes the resulting lists to the requested output files.
+    """
     parser = argparse.ArgumentParser(
         description="Compare two dpkg package lists.",
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
-        "-c", "--compare",
+        "-c",
+        "--compare",
         nargs=2,
-        metavar=('list1.txt', 'list2.txt'),
-        help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt."
+        metavar=("list1.txt", "list2.txt"),
+        help="Paths to the package lists to compare, i.e., old_list1.txt new_list2.txt.",
     )
     parser.add_argument(
-        "-u", "--out-updated",
+        "-u",
+        "--out-updated",
         metavar="update_list.txt",
-        help="File name for saving packages with newer versions."
+        help="File name for saving packages with newer versions.",
     )
     parser.add_argument(
-        "-n", "--out-new",
+        "-n",
+        "--out-new",
         metavar="new_list.txt",
-        help="File name for saving packages only in the second list."
+        help="File name for saving packages only in the second list.",
     )
     parser.add_argument(
-        "-r", "--out-removed",
+        "-r",
+        "--out-removed",
         metavar="removed_list.txt",
-        help="File name for saving packages removed from the second list."
+        help="File name for saving packages removed from the second list.",
     )
     parser.add_argument(
         "--dpkg-db-a",
         metavar="var-lib-dpkg-a.tar.xz",
-        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list A."
+        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list A.",
     )
     parser.add_argument(
         "--dpkg-db-b",
         metavar="var-lib-dpkg-b.tar.xz",
-        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list B."
+        help="TAR archive containing /var/lib/dpkg from the rootfs snapshot used to generate list B.",
     )
 
     args = parser.parse_args()
 
     exclude_list = [
-        'apt-transport-https',
-        'calamares',
-        'calamares-qml-settings-nitrux',
-        'casper'
+        "apt-transport-https",
+        "calamares",
+        "calamares-qml-settings-nitrux",
+        "casper",
     ]
 
     exclude_patterns = [
-        r'nvidia',
-        r'systemd'
+        r"nvidia",
+        r"systemd",
     ]
 
     if args.compare and args.out_updated and args.out_new and args.out_removed:
