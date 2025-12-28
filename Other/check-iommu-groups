@@ -3,30 +3,57 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright 2023-2025 <Nitrux Latinoamericana S.C. <hello@nxos.org>>
 
-
 # -- Check IOMMU groups and display output.
 
-import os
 import glob
+import os
 import subprocess
 
+
 def get_device_description(device_path):
+    """Return the human-readable PCI device description for a PCI address.
+
+    The function runs `lspci -nn -s <device>` and returns the output, or
+    "Unknown Device" if the query fails.
+
+    Args:
+        device_path: A PCI device address such as '0000:01:00.0'.
+
+    Returns:
+        A string containing the device description.
+    """
     device_name = os.path.basename(device_path)
     try:
-        result = subprocess.run([
-            "lspci", "-nn", "-s", device_name
-        ], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["lspci", "-nn", "-s", device_name],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         return result.stdout.strip() if result.stdout else "Unknown Device"
-    except Exception:
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return "Unknown Device"
 
+
 def list_iommu_groups():
+    """Enumerate and print IOMMU groups and their PCI devices.
+
+    This function inspects `/sys/kernel/iommu_groups/`, lists groups in
+    numeric order, and prints each device with a tree-style prefix and
+    description obtained via `lspci`.
+    """
     iommu_path = "/sys/kernel/iommu_groups/"
     if not os.path.exists(iommu_path):
-        print("IOMMU groups not found. Ensure IOMMU is enabled in the BIOS and kernel parameters.")
+        print(
+            "IOMMU groups not found. Ensure IOMMU is enabled in the BIOS and "
+            "kernel parameters."
+        )
         return
 
-    groups = sorted([d for d in os.listdir(iommu_path) if d.isdigit()], key=int)
+    groups = sorted(
+        [d for d in os.listdir(iommu_path) if d.isdigit()],
+        key=int,
+    )
 
     for group in groups:
         group_path = os.path.join(iommu_path, group, "devices")
@@ -38,10 +65,13 @@ def list_iommu_groups():
                 pci_address = os.path.basename(os.readlink(device))
             else:
                 pci_address = os.path.basename(device)
+
             description = get_device_description(pci_address)
             prefix = "├──" if i < len(devices) - 1 else "└──"
             print(f"  {prefix} {pci_address} ({description})")
+
         print()
+
 
 if __name__ == "__main__":
     list_iommu_groups()

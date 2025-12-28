@@ -2,20 +2,39 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright <2025> <Uri Herrera <uri_herrera@nxos.org>>
 
+import argparse
+import hashlib
 import os
 import shutil
 import subprocess
-from tqdm import tqdm
-import time
-import argparse
 import sys
-import hashlib
+import time
+
+from tqdm import tqdm
+
 
 def is_bootable_iso(iso_file):
+    """Determine whether the given ISO file is considered bootable.
+
+    Args:
+        iso_file: Path to the ISO image file.
+
+    Returns:
+        True if the ISO is treated as bootable, False otherwise.
+    """
     return True
 
+
 def get_file_checksum(file_path):
-    with open(file_path, 'rb') as f:
+    """Compute the SHA-256 checksum of a file.
+
+    Args:
+        file_path: Path to the file to checksum.
+
+    Returns:
+        Hex-encoded SHA-256 checksum string.
+    """
+    with open(file_path, "rb") as f:
         checksum = hashlib.sha256()
         while True:
             chunk = f.read(4096)
@@ -24,7 +43,18 @@ def get_file_checksum(file_path):
             checksum.update(chunk)
     return checksum.hexdigest()
 
+
 def copy_iso_to_directory(iso_file, target_dir):
+    """Copy an ISO file to a directory with progress and checksum verification.
+
+    The function computes the source checksum, copies the file in blocks while
+    showing a progress bar, then computes the destination checksum and compares
+    it to the source.
+
+    Args:
+        iso_file: Path to the ISO file.
+        target_dir: Directory where the ISO file will be copied.
+    """
     file_size = os.path.getsize(iso_file)
     source_checksum = get_file_checksum(iso_file)
 
@@ -40,23 +70,33 @@ def copy_iso_to_directory(iso_file, target_dir):
         print(f"Target file checksum (SHA-256): {target_checksum}")
 
         if source_checksum == target_checksum:
-            print("File already exists at the target directory with the same checksum. Skipping copy operation.")
+            print(
+                "File already exists at the target directory with the same "
+                "checksum. Skipping copy operation."
+            )
             return
-        else:
-            print("File exists at the target directory but with a different checksum. Deleting it.")
+        print(
+            "File exists at the target directory but with a different "
+            "checksum. Deleting it."
+        )
 
-            try:
-                os.remove(dst_path)
-            except OSError as e:
-                print(f"Error deleting file: {e}")
-                return
+        try:
+            os.remove(dst_path)
+        except OSError as e:
+            print(f"Error deleting file: {e}")
+            return
 
     block_size = 4 * 1024 * 1024
     total_blocks = (file_size + block_size - 1) // block_size
 
-    with open(iso_file, 'rb') as src_file:
-        with open(dst_path, 'wb') as dst_file:
-            with tqdm(total=file_size, unit='B', unit_scale=True, desc='Copying ISO file') as progress:
+    with open(iso_file, "rb") as src_file:
+        with open(dst_path, "wb") as dst_file:
+            with tqdm(
+                total=file_size,
+                unit="B",
+                unit_scale=True,
+                desc="Copying ISO file",
+            ) as progress:
                 for _ in range(total_blocks):
                     block = src_file.read(block_size)
                     if not block:
@@ -75,10 +115,24 @@ def copy_iso_to_directory(iso_file, target_dir):
     else:
         print("Checksums do not match. File may not have been copied successfully.")
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Copy a bootable ISO file to a directory.')
-    parser.add_argument('-f', '--file', help='Path to the bootable ISO file', required=True)
-    parser.add_argument('-d', '--directory', help='Target directory', required=True)
+    """Parse CLI arguments and perform ISO-to-directory copy."""
+    parser = argparse.ArgumentParser(
+        description="Copy a bootable ISO file to a directory.",
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        help="Path to the bootable ISO file",
+        required=True,
+    )
+    parser.add_argument(
+        "-d",
+        "--directory",
+        help="Target directory",
+        required=True,
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.file):
@@ -93,7 +147,8 @@ def main():
 
     copy_iso_to_directory(args.file, args.directory)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     if len(sys.argv) == 1:
-        sys.argv.append('-h')
+        sys.argv.append("-h")
     main()

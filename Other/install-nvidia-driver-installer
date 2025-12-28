@@ -2,6 +2,10 @@
 
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright 2024-2025 <Nitrux Latinoamericana S.C. <hello@nxos.org>>
+
+
+# -- Exit on errors.
+
 set -eu
 
 
@@ -24,18 +28,18 @@ axel -a -q -k -U "$USER_AGENT" -n 8 "$FULL_URL" -o "${DESTINATION}/$(basename "$
 
 # -- Install the build dependencies.
 
-NVIDIA_DRV_DEPS_PKGS='
-	acpid
-	axel
-	build-essential
-	dkms
-	initramfs-tools
-	libglvnd-core-dev
-	libglvnd-dev
-	pkg-config
-'
+NVIDIA_DRV_DEPS_PKGS=(
+    acpid
+    axel
+    build-essential
+    dkms
+    initramfs-tools
+    libglvnd-core-dev
+    libglvnd-dev
+    pkg-config
+)
 
-apt install -y --no-install-recommends $NVIDIA_DRV_DEPS_PKGS
+apt install -y --no-install-recommends "${NVIDIA_DRV_DEPS_PKGS[@]}"
 
 
 # -- Execute the installer.
@@ -57,11 +61,11 @@ fi
 
 # -- Remove build dependencies.
 
-NVIDIA_DRV_DEV_PKGS='
-	libglvnd-core-dev
-	libglvnd-dev
-	pkgconf
-	pkgconf-bin
-'
+NVIDIA_DRV_DEV_PKGS=(
+    libglvnd-core-dev
+    libglvnd-dev
+    pkgconf
+    pkgconf-bin
+)
 
-apt autoremove -y $NVIDIA_DRV_DEV_PKGS
+apt autoremove -y "${NVIDIA_DRV_DEV_PKGS[@]}"

@@ -6,14 +6,23 @@ import os
 import argparse
 import gnupg
 
+
 def select_iso_file():
+    """List ISO files in the current directory and allow the user to select one.
+
+    Returns:
+        The filename of the selected ISO file, or None if no valid file
+        is selected or no ISO files are found.
+    """
     iso_files = [f for f in os.listdir('.') if f.endswith('.iso')]
     if not iso_files:
         print("No ISO files found in the current directory.")
         return None
+
     print("Select an ISO file to sign:")
     for i, iso_file in enumerate(iso_files):
         print(f"{i+1}. {iso_file}")
+
     choice = input("Enter the number of the ISO file to sign: ")
     try:
         choice_index = int(choice) - 1
@@ -24,14 +33,26 @@ def select_iso_file():
         print("Invalid choice.")
         return None
 
+
 def select_key(gpg):
+    """List available GPG keys and allow the user to select one.
+
+    Args:
+        gpg: An initialized gnupg.GPG instance.
+
+    Returns:
+        The key ID of the selected key, or None if no valid key is selected
+        or no keys are found.
+    """
     keys = gpg.list_keys()
     if not keys:
         print("No keys found.")
         return None
+
     print("Select a key to sign with:")
     for i, key in enumerate(keys):
         print(f"{i+1}. {key['uids'][0]}")
+
     choice = input("Enter the number of the key to use: ")
     try:
         choice_index = int(choice) - 1
@@ -42,9 +63,26 @@ def select_key(gpg):
         print("Invalid choice.")
         return None
 
+
 def sign_iso(gpg, iso_file, key_id):
+    """Sign an ISO file using the specified GPG key.
+
+    A detached ASCII-armored signature (.asc) file is created alongside
+    the ISO file.
+
+    Args:
+        gpg: An initialized gnupg.GPG instance.
+        iso_file: Path to the ISO file to sign.
+        key_id: The GPG key ID to use for signing.
+    """
     with open(iso_file, 'rb') as f:
-        signed_data = gpg.sign_file(f, keyid=key_id, detach=True, output=f'{iso_file}.asc')
+        signed_data = gpg.sign_file(
+            f,
+            keyid=key_id,
+            detach=True,
+            output=f'{iso_file}.asc'
+        )
+
     if signed_data.status == 'success':
         print("ISO file signed successfully.")
     else:
@@ -52,10 +90,26 @@ def sign_iso(gpg, iso_file, key_id):
         print(f"Status: {signed_data.status}")
         print(f"Stderr: {signed_data.stderr}")
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Sign an ISO file with a selected GPG key.')
-    parser.add_argument('-f', '--iso-file', help='Path to the ISO file to sign')
-    parser.add_argument('key_id', nargs='?', help='ID of the GPG key to use for signing')
+    """Main entry point for the sigiso CLI tool.
+
+    Parses arguments, prompts the user for missing values if required,
+    initializes GPG, and signs the specified ISO file.
+    """
+    parser = argparse.ArgumentParser(
+        description='Sign an ISO file with a selected GPG key.'
+    )
+    parser.add_argument(
+        '-f',
+        '--iso-file',
+        help='Path to the ISO file to sign'
+    )
+    parser.add_argument(
+        'key_id',
+        nargs='?',
+        help='ID of the GPG key to use for signing'
+    )
     args = parser.parse_args()
 
     if len(vars(args)) == 1:
@@ -68,6 +122,7 @@ def main():
             return
 
     gpg = gnupg.GPG()
+
     if not os.path.exists(args.iso_file):
         print("ISO file not found.")
         return
@@ -78,6 +133,7 @@ def main():
             return
 
     sign_iso(gpg, args.iso_file, args.key_id)
+
 
 if __name__ == "__main__":
     main()
