@@ -13,6 +13,23 @@ from tqdm import tqdm
 
 
 def download_packages(package_list_file, download_dir):
+    """Download packages listed in a text file using `apt download`.
+
+    The function validates the existence of both the list file and the
+    destination directory, performs `apt update`, and then downloads each
+    package listed in the file into the given directory. A progress bar is
+    displayed during the download process.
+
+    Args:
+        package_list_file: Path to a text file containing one package name
+            per line.
+        download_dir: Path to the directory where package files will be saved.
+
+    Raises:
+        SystemExit: If the input file or directory does not exist, if
+            `apt update` fails, or if any requested package cannot be
+            downloaded.
+    """
     if not os.path.exists(package_list_file):
         print(f"Error: Package list file '{package_list_file}' not found.")
         sys.exit(1)
@@ -42,7 +59,8 @@ def download_packages(package_list_file, download_dir):
         desc='Downloading packages',
         unit='pkg',
         ncols=terminal_width,
-        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
+        bar_format='{desc}: {percentage:3.0f}%|{bar}| '
+                   '{n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
     ) as pbar:
         for package in packages:
             try:
@@ -63,6 +81,11 @@ def download_packages(package_list_file, download_dir):
 
 
 def main():
+    """Parse command-line arguments and execute the download workflow.
+
+    This function handles CLI argument parsing for the package list file
+    and download directory, then delegates to `download_packages`.
+    """
     parser = argparse.ArgumentParser(
         description="Download packages from a list using 'apt download'."
     )
@@ -70,7 +93,8 @@ def main():
         '-f', '--file', required=True, help="Path to the package list file."
     )
     parser.add_argument(
-        '-d', '--directory', required=True, help="Directory to download packages to."
+        '-d', '--directory', required=True,
+        help="Directory to download packages to."
     )
     args = parser.parse_args()
 
