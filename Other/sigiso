@@ -9,7 +9,10 @@ import argparse
 try:
     import gnupg
 except ModuleNotFoundError:
-    print("Error: The 'python-gnupg' module is not installed. Please install it and try again.")
+    print(
+        "Error: The 'python-gnupg' module is not installed. "
+        "Please install it and try again."
+    )
     sys.exit(1)
 
 
@@ -20,14 +23,14 @@ def select_iso_file():
         The filename of the selected ISO file, or None if no valid file
         is selected or no ISO files are found.
     """
-    iso_files = [f for f in os.listdir('.') if f.endswith('.iso')]
+    iso_files = [f for f in os.listdir(".") if f.endswith(".iso")]
     if not iso_files:
         print("No ISO files found in the current directory.")
         return None
 
     print("Select an ISO file to sign:")
-    for i, iso_file in enumerate(iso_files):
-        print(f"{i+1}. {iso_file}")
+    for i, iso_file in enumerate(iso_files, start=1):
+        print(f"{i}. {iso_file}")
 
     choice = input("Enter the number of the ISO file to sign: ")
     try:
@@ -56,15 +59,15 @@ def select_key(gpg):
         return None
 
     print("Select a key to sign with:")
-    for i, key in enumerate(keys):
-        print(f"{i+1}. {key['uids'][0]}")
+    for i, key in enumerate(keys, start=1):
+        print(f"{i}. {key['uids'][0]}")
 
     choice = input("Enter the number of the key to use: ")
     try:
         choice_index = int(choice) - 1
         if choice_index < 0 or choice_index >= len(keys):
             raise ValueError
-        return keys[choice_index]['keyid']
+        return keys[choice_index]["keyid"]
     except (ValueError, IndexError):
         print("Invalid choice.")
         return None
@@ -81,15 +84,15 @@ def sign_iso(gpg, iso_file, key_id):
         iso_file: Path to the ISO file to sign.
         key_id: The GPG key ID to use for signing.
     """
-    with open(iso_file, 'rb') as f:
+    with open(iso_file, "rb") as f:
         signed_data = gpg.sign_file(
             f,
             keyid=key_id,
             detach=True,
-            output=f'{iso_file}.asc'
+            output=f"{iso_file}.asc",
         )
 
-    if signed_data.status == 'success':
+    if signed_data.status == "success":
         print("ISO file signed successfully.")
     else:
         print("Failed to sign ISO file.")
@@ -104,17 +107,17 @@ def main():
     initializes GPG, and signs the specified ISO file.
     """
     parser = argparse.ArgumentParser(
-        description='Sign an ISO file with a selected GPG key.'
+        description="Sign an ISO file with a selected GPG key.",
     )
     parser.add_argument(
-        '-f',
-        '--iso-file',
-        help='Path to the ISO file to sign'
+        "-f",
+        "--iso-file",
+        help="Path to the ISO file to sign",
     )
     parser.add_argument(
-        'key_id',
-        nargs='?',
-        help='ID of the GPG key to use for signing'
+        "key_id",
+        nargs="?",
+        help="ID of the GPG key to use for signing",
     )
 
     if len(sys.argv) == 1:
