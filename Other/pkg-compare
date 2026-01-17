@@ -429,6 +429,7 @@ def main():
     args = parser.parse_args()
 
     exclude_list = [
+        "apt",
         "apt-transport-https",
         "calamares",
         "calamares-qml-settings-nitrux",
@@ -436,6 +437,8 @@ def main():
     ]
 
     exclude_patterns = [
+        r"dpkg",
+        r"libapt-pkg",
         r"nvidia",
         r"systemd",
     ]
