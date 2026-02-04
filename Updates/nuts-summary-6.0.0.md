@@ -1,6 +1,3 @@
-# Nitrux 6.0.0
-**Nitrux Latinoamericana** **3.48 GB**
-
 Nitrux 6.0.0 combines the latest software updates, bug fixes, and performance improvements with ready-to-use hardware support. This release continues the evolution of our immutable foundation.
 
 ### Key Enhancements
