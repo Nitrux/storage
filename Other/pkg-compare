@@ -464,16 +464,18 @@ def main():
         if args.dpkg_db_b:
             dpkg_meta_b = load_dpkg_metadata_from_tar(args.dpkg_db_b)
 
-        replaces_index, provides_index = build_transition_index_for_b(
-            list_b,
-            dpkg_meta_b,
-        )
-
-        real_removals = []
-        for removed_pkg in removed_packages:
-            if removed_pkg in replaces_index or removed_pkg in provides_index:
-                continue
-            real_removals.append(removed_pkg)
+        if dpkg_meta_b is not None:
+            replaces_index, provides_index = build_transition_index_for_b(
+                list_b,
+                dpkg_meta_b,
+            )
+            real_removals = []
+            for removed_pkg in removed_packages:
+                if removed_pkg in replaces_index or removed_pkg in provides_index:
+                    continue
+                real_removals.append(removed_pkg)
+        else:
+            real_removals = list(removed_packages)
 
         if args.nv_update:
             nv_updated = classify_nvidia_packages(
