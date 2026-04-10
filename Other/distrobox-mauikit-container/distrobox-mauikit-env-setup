@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2025 <Uri Herrera <uri_herrera@nxos.org>>
+
+set -eu
+
+
+# -- Check if APT exists.
+
+if ! command -v apt >/dev/null 2>&1; then
+    echo "Error: 'apt' command not found. Please make sure it's available and try again, quitting."
+    exit 1
+fi
+
+
+# -- Add APT configuration.
+
+cp -r "$PWD"/container-setup/configs/files/apt_preferences/* /etc/apt/preferences.d/
+cp -r "$PWD"/container-setup/configs/files/apt_conf/* /etc/apt/apt.conf.d/
+
+
+# -- Source APT commands as functions.
+# shellcheck source=/dev/null
+
+source "$PWD"/container-setup/configs/scripts/others/apt-funcs
+
+
+# -- Add Nitrux repository keys.
+
+add_nitrux_key mauikit
+
+
+# -- Add build sources.
+
+cp "$PWD"/container-setup/configs/files/sources/* /etc/apt/sources.list.d/
+
+
+# -- Updated package index.
+
+[ -f /etc/apt/sources.list ] && rm -f /etc/apt/sources.list
+
+update
+
+
+# -- Upgrade rootfs packages.
+
+upgrade
+
+
+# -- Install packages to build MauiKit.
+
+INSTALL_MK_PKGS=(
+    apt-file
+    build-essential
+    cmake
+    extra-cmake-modules
+    git
+    libkf6config-dev
+    libkf6coreaddons-dev
+    libkf6i18n-dev
+    micro
+    qt6-5compat-dev
+    qt6-base-dev
+    qt6-declarative-dev
+    qt6-svg-dev
+)
+
+install "${INSTALL_MK_PKGS[@]}"
+
+
+# -- Update apt-file index.
+
+db_file_update

@@ -1,0 +1,31 @@
+#########################
+#   Blocked Packages    #
+#########################
+
+Package: desktop-base
+Pin: release *
+Pin-Priority: -1
+
+Package: initscripts
+Pin: release *
+Pin-Priority: -1
+
+Package: k3b
+Pin: release *
+Pin-Priority: -1
+
+Package: k3b-i18n
+Pin: release *
+Pin-Priority: -1
+
+Package: libtss2-esys0
+Pin: release *
+Pin-Priority: -1
+
+Package: plymouth-theme-spinner
+Pin: release *
+Pin-Priority: -1
+
+Package: sysvinit-core
+Pin: release *
+Pin-Priority: -1
