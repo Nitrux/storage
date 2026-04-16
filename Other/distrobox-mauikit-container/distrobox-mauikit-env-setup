@@ -78,6 +78,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libkf6kio-dev
     libkf6notifications-dev
     libkf6pty-dev
+    libkf6sonnet-dev
     libkf6syntaxhighlighting-dev
     libkf6windowsystem-dev
     libleptonica-dev
