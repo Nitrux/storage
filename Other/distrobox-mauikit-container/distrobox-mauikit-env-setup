@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright 2025 <Uri Herrera <uri_herrera@nxos.org>>
+# Copyright 2026 <Uri Herrera <uri_herrera@nxos.org>>
 
 set -eu
 
@@ -50,23 +50,67 @@ upgrade
 
 # -- Install packages to build MauiKit.
 
-INSTALL_MK_PKGS=(
-    apt-file
+INSTALL_BUILD_MAUIKIT_PKGS=(
+    appstream
+    automake
+    autotools-dev
     build-essential
+    checkinstall
     cmake
+    curl
+    devscripts
+    equivs
     extra-cmake-modules
+    gettext
     git
+    gnupg2
+    kquickimageeditor-dev
+    libexiv2-dev
+    libkexiv2qt6-dev
+    libkf6archive-dev
+    libkf6calendarcore-dev
     libkf6config-dev
     libkf6coreaddons-dev
+    libkf6filemetadata-dev
     libkf6i18n-dev
-    micro
+    libkf6iconthemes-dev
+    libkf6kio-dev
+    libkf6notifications-dev
+    libkf6pty-dev
+    libkf6syntaxhighlighting-dev
+    libkf6windowsystem-dev
+    libleptonica-dev
+    libopencv-dev
+    libpoppler-private-dev
+    libpoppler-qt6-dev
+    libtesseract-dev
+    libxcb-icccm4-dev
+    libxcb-shape0-dev
+    lintian
+    nlohmann-json3-dev
+    qml6-module-qt5compat-graphicaleffects
+    qml6-module-qtquick-controls
+    qml6-module-qtquick-shapes
     qt6-5compat-dev
     qt6-base-dev
+    qt6-base-private-dev
     qt6-declarative-dev
+    qt6-declarative-private-dev
+    qt6-multimedia-dev
+    qt6-positioning-dev
     qt6-svg-dev
 )
 
-install "${INSTALL_MK_PKGS[@]}"
+install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
+
+
+# -- Install packages for desktop integration.
+
+INSTALL_DESKTOP_INTEGRATION_PKGS=(
+    plasma-workspace
+)
+
+install "${INSTALL_DESKTOP_INTEGRATION_PKGS[@]}"
 
 
 # -- Update apt-file index.
