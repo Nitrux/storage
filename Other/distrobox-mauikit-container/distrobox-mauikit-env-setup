@@ -52,6 +52,7 @@ upgrade
 
 INSTALL_BUILD_MAUIKIT_PKGS=(
     appstream
+    apt-file
     automake
     autotools-dev
     build-essential
@@ -87,6 +88,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libxcb-icccm4-dev
     libxcb-shape0-dev
     lintian
+    micro
     nlohmann-json3-dev
     qml6-module-qt5compat-graphicaleffects
     qml6-module-qtquick-controls
