@@ -126,3 +126,8 @@ db_file_update
 # -- Cleanup packages.
 
 autoremove
+
+
+# -- Create the generic XDG menu file name, so KApplicationTrader::queryByMimeType(...) finds it.
+
+ln -sv /etc/xdg/menus/plasma-applications.menu /etc/xdg/menus/applications.menu
