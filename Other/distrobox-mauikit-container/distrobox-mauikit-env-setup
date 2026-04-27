@@ -29,6 +29,7 @@ source "$PWD"/container-setup/configs/scripts/others/apt-funcs
 # -- Add Nitrux repository keys.
 
 add_nitrux_key mauikit
+add_nitrux_key testing
 
 
 # -- Add build sources.
@@ -110,6 +111,7 @@ install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
 # -- Install packages for desktop integration.
 
 INSTALL_DESKTOP_INTEGRATION_PKGS=(
+    luv-icon-theme
     plasma-workspace
 )
 
@@ -119,3 +121,8 @@ install "${INSTALL_DESKTOP_INTEGRATION_PKGS[@]}"
 # -- Update apt-file index.
 
 db_file_update
+
+
+# -- Cleanup packages.
+
+autoremove
