@@ -107,6 +107,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     qt6-positioning-dev
     qt6-svg-dev
     qt6-webengine-dev
+    tesseract-ocr-all
 )
 
 install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
