@@ -63,6 +63,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     devscripts
     equivs
     extra-cmake-modules
+    ffmpeg
     gettext
     git
     gnupg2
@@ -84,8 +85,10 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libkf6windowsystem-dev
     libleptonica-dev
     libopencv-dev
+    libpipewire-0.3-dev
     libpoppler-private-dev
     libpoppler-qt6-dev
+    libtag1-dev
     libtesseract-dev
     libxcb-icccm4-dev
     libxcb-shape0-dev
