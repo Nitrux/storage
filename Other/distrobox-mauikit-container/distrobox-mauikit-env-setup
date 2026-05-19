@@ -135,6 +135,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     qt6-webengine-dev
     ripgrep
     tesseract-ocr-all
+    wireplumber
 )
 
 install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
