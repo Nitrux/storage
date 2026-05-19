@@ -90,14 +90,25 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libkf6syntaxhighlighting-dev
     libkf6windowsystem-dev
     libleptonica-dev
+    libmp3lame-dev
+    libmpcdec-dev
     libmpv-dev
+    libogg-dev
     libopencv-dev
+    libopus-dev
+    libopusfile-dev
     libpipewire-0.3-dev
     libpoppler-private-dev
     libpoppler-qt6-dev
+    libpulse-dev
     libsecret-1-dev
+    libshout-dev
+    libsoxr-dev
+    libspa-0.2-dev
     libtag1-dev
     libtesseract-dev
+    libvorbis-dev
+    libwildmidi-dev
     libxcb-icccm4-dev
     libxcb-shape0-dev
     lintian
