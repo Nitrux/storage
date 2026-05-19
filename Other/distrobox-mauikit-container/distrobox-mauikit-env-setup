@@ -71,10 +71,17 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     kdegraphics-thumbnailers
     kio-extras
     kquickimageeditor-dev
+    libarchive-dev
+    libavcodec-dev
+    libavformat-dev
+    libavutil-dev
+    libcddb2-dev
     libcdio-cdda-dev
     libcdio-dev
     libcdio-paranoia-dev
     libexiv2-dev
+    libgme-dev
+    libjack-jackd2-dev
     libkexiv2qt6-dev
     libkf6archive-dev
     libkf6calendarcore-dev
