@@ -90,6 +90,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libkf6filemetadata-dev
     libkf6i18n-dev
     libkf6iconthemes-dev
+    libkf6idletime-dev
     libkf6kio-dev
     libkf6notifications-dev
     libkf6pty-dev
