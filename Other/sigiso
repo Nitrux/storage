@@ -92,10 +92,10 @@ def sign_iso(gpg, iso_file, key_id):
             output=f"{iso_file}.asc",
         )
 
-    if signed_data.status == "success":
+    if signed_data:
         print("ISO file signed successfully.")
     else:
-        print("Failed to sign ISO file.")
+        print("Failed to sign the ISO file.")
         print(f"Status: {signed_data.status}")
         print(f"Stderr: {signed_data.stderr}")
 
