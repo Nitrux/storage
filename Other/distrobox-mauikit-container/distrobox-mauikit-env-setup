@@ -84,6 +84,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libjack-jackd2-dev
     libkexiv2qt6-dev
     libkf6archive-dev
+    libkf6bluezqt-dev
     libkf6calendarcore-dev
     libkf6config-dev
     libkf6coreaddons-dev
