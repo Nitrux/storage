@@ -34,7 +34,7 @@ add_nitrux_key testing
 
 # -- Add build sources.
 
-cp "$PWD"/container-setup/configs/files/sources/* /etc/apt/sources.list.d/
+cp "$PWD"/container-setup/configs/files/sources/{debian,nitrux-mauikit}.sources /etc/apt/sources.list.d/
 
 
 # -- Updated package index.
