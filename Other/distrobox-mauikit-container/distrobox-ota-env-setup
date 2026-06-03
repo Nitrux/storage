@@ -55,12 +55,13 @@ upgrade
 
 # -- Install packages to build MauiKit.
 
-INSTALL_BUILD_MAUIKIT_PKGS=(
-    squashfs-tools
+INSTALL_OTA_ENV_PKGS=(
+    apt-file
     python3-tqdm
+    squashfs-tools
 )
 
-install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
+install "${INSTALL_OTA_ENV_PKGS[@]}"
 
 
 # -- Update apt-file index.
