@@ -53,7 +53,7 @@ update
 upgrade
 
 
-# -- Install packages to build MauiKit.
+# -- Install packages.
 
 INSTALL_OTA_ENV_PKGS=(
     apt-file
