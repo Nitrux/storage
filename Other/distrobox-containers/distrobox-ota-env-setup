@@ -57,6 +57,7 @@ upgrade
 
 INSTALL_OTA_ENV_PKGS=(
     apt-file
+    git
     python3-tqdm
     squashfs-tools
 )
