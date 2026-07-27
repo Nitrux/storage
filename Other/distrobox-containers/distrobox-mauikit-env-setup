@@ -44,6 +44,17 @@ cp "$PWD"/container-setup/configs/files/sources/{debian,nitrux-mauikit}.sources 
 update
 
 
+# -- Neutralize systemd-tmpfiles completely.
+#   -- When apt installs or upgrades systemd, dpkg executes the package maintainer script (postinst). 
+#   -- This script runs systemd-tmpfiles --create to set strict ownership and permissions on system directories.
+#   -- The configuration file /usr/lib/tmpfiles.d/tmp.conf instructs systemd-tmpfiles to manage /tmp. 
+#   -- Because Distrobox bind-mounts the host /tmp directory into the container, the kernel blocks an unprivileged user namespace from altering host mount permissions.
+#   -- Systemd treats this failure as fatal, causing dpkg to exit with an error.
+
+dpkg_divert /usr/bin/systemd-tmpfiles
+ln -sf /bin/true /usr/bin/systemd-tmpfiles
+
+
 # -- Upgrade rootfs packages.
 
 upgrade
