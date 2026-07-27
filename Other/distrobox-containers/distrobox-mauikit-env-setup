@@ -134,6 +134,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libwildmidi-dev
     libxcb-icccm4-dev
     libxcb-shape0-dev
+    libxcursor-dev
     lintian
     micro
     nlohmann-json3-dev
