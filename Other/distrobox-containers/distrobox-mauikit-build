@@ -47,7 +47,9 @@ for dir in "${REPOS[@]}"; do
 
     sudo rm -rf "$dir/build"
 
-    cmake -B "$dir/build" -S "$dir" -DCMAKE_BUILD_TYPE=Release
+    cmake -B "$dir/build" -S "$dir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     cmake --build "$dir/build" -j"$(nproc)"
     sudo cmake --install "$dir/build"
 
