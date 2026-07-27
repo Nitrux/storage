@@ -6,6 +6,11 @@
 set -eu
 
 
+# -- Environment variables.
+
+export DEBIAN_FRONTEND=noninteractive
+
+
 # -- Check if APT exists.
 
 if ! command -v apt >/dev/null 2>&1; then
