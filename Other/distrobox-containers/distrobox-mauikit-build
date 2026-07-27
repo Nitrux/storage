@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 <Uri Herrera <uri_herrera@nxos.org>>
+
+set -eu
+
+
+# -- Resolve the target user's home directory even if invoked with sudo.
+
+USER_NAME="${SUDO_USER:-$USER}"
+USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+
+
+# -- Directories to build in order.
+
+REPOS=(
+    "$USER_HOME/GitHub/Nitrux/maui-manager-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-accounts-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-filebrowsing-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-archiver-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-documents-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-imagetools-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-texteditor-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-terminal-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-system-src"
+)
+
+
+# -- Authenticate sudo upfront and keep the timestamp alive during the build.
+
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+SUDO_KEEP_ALIVE_PID=$!
+trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT
+
+for dir in "${REPOS[@]}"; do
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: Directory not found -> $dir" >&2
+        exit 1
+    fi
+
+    echo "=================================================="
+    echo "  Building: $(basename "$dir")"
+    echo "=================================================="
+
+    sudo rm -rf "$dir/build"
+
+    cmake -B "$dir/build" -S "$dir" -DCMAKE_BUILD_TYPE=Release
+    cmake --build "$dir/build" -j"$(nproc)"
+    sudo cmake --install "$dir/build"
+
+    echo ""
+done
+
+echo "All components built and installed successfully."
