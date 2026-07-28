@@ -18,6 +18,7 @@ REPOS=(
     "$USER_HOME/GitHub/Nitrux/maui-manager-src"
     "$USER_HOME/GitHub/Nitrux/mauikit-src"
     "$USER_HOME/GitHub/Nitrux/mauikit-accounts-src"
+    "$USER_HOME/GitHub/Nitrux/mauikit-calendar-src"
     "$USER_HOME/GitHub/Nitrux/mauikit-filebrowsing-src"
     "$USER_HOME/GitHub/Nitrux/mauikit-archiver-src"
     "$USER_HOME/GitHub/Nitrux/mauikit-documents-src"
