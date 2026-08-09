@@ -130,6 +130,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libpoppler-private-dev
     libpoppler-qt6-dev
     libpulse-dev
+    libpwquality-dev
     libsecret-1-dev
     libshout-dev
     libsoxr-dev
