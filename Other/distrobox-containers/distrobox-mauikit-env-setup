@@ -126,6 +126,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libopencv-dev
     libopus-dev
     libopusfile-dev
+    libpam0g-dev
     libpipewire-0.3-dev
     libpoppler-private-dev
     libpoppler-qt6-dev
