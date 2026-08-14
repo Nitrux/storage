@@ -133,6 +133,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libopusfile-dev
     libpam0g-dev
     libpipewire-0.3-dev
+    libpolkit-qt6-1-dev
     libpoppler-private-dev
     libpoppler-qt6-dev
     libpulse-dev
