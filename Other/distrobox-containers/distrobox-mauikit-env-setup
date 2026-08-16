@@ -20,6 +20,10 @@ fi
 
 
 # -- Add APT configuration.
+#   -- Remove source definitions inherited from the base image. Keeping them
+#   -- active can mix Debian stable packages with the testing snapshot below.
+
+rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
 
 cp -r "$PWD"/container-setup/configs/files/apt_preferences/* /etc/apt/preferences.d/
 cp -r "$PWD"/container-setup/configs/files/apt_conf/* /etc/apt/apt.conf.d/
@@ -42,13 +46,6 @@ add_nitrux_key testing
 cp "$PWD"/container-setup/configs/files/sources/{debian,nitrux-mauikit}.sources /etc/apt/sources.list.d/
 
 
-# -- Updated package index.
-
-[ -f /etc/apt/sources.list ] && rm -f /etc/apt/sources.list
-
-update
-
-
 # -- Neutralize systemd-tmpfiles completely.
 #   -- When apt installs or upgrades systemd, dpkg executes the package maintainer script (postinst). 
 #   -- This script runs systemd-tmpfiles --create to set strict ownership and permissions on system directories.
@@ -60,9 +57,25 @@ dpkg_divert /usr/bin/systemd-tmpfiles
 ln -sf /bin/true /usr/bin/systemd-tmpfiles
 
 
-# -- Upgrade rootfs packages.
+# -- Divert rev while util-linux and bsdextrautils transition ownership.
+#   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils
+#   -- packages install the same path. Keep the former file available at the
+#   -- diverted path so dpkg can install the new owner without a conflict.
 
-upgrade
+dpkg_divert /usr/bin/rev
+
+
+# -- Refresh package indexes after all diversions are registered.
+
+update
+
+
+# -- Upgrade rootfs packages as a coordinated dependency transition.
+#   -- apt upgrade/--only-upgrade can unpack libraries without upgrading the
+#   -- packages that must match them (for example libsmartcols and util-linux).
+
+dist_upgrade_brute_force
+dpkg_conf
 
 
 # -- Install packages to build MauiKit.

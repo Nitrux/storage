@@ -40,6 +40,7 @@ add_third_party_repo_keys () {
 autoremove () { apt -yy autoremove "$@"; }
 clean_all () { apt clean && apt autoclean; }
 dist_upgrade () { apt -yy dist-upgrade "$@"; }
+dist_upgrade_brute_force () { apt-get -y --fix-broken dist-upgrade --allow-downgrades -o Dpkg::Options::=--force-overwrite "$@"; }
 download () { apt download "$@"; }
 fix_install () { apt -yy --fix-broken install "$@"; }
 fix_install_no_recommends () { apt -yy --fix-broken install --no-install-recommends "$@"; }
@@ -69,7 +70,7 @@ db_file_update () { apt-file update; }
 
 # -- Wrap dpkg commands in functions.
 
-dpkg_conf () { dpkg --configure -a; }
+dpkg_conf () { dpkg --force-confnew --configure -a; }
 dpkg_divert () { dpkg-divert --local --rename --add "$@"; }
 dpkg_force_install () { dpkg --force-all -i "$@"; }
 dpkg_force_remove () { /usr/bin/dpkg --remove --no-triggers --force-remove-essential --force-bad-path "$@"; }
