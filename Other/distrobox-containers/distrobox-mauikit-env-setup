@@ -59,15 +59,20 @@ ln -sf /bin/true /usr/bin/systemd-tmpfiles
 
 # -- Divert rev while util-linux and bsdextrautils transition ownership.
 #   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils
-#   -- packages install the same path. Keep the former file available at the
-#   -- diverted path so dpkg can install the new owner without a conflict.
+#   -- packages install the same path. Record the diversion without renaming
+#   -- the existing executable because util-linux marks it Essential.
 
-dpkg_divert /usr/bin/rev
+dpkg-divert --local --no-rename --add /usr/bin/rev
 
 
 # -- Refresh package indexes after all diversions are registered.
 
 update
+
+
+# -- Align libexpat with the testing snapshot before the full upgrade.
+
+install_downgrades libexpat1=2.8.2-1
 
 
 # -- Upgrade rootfs packages as a coordinated dependency transition.
@@ -191,7 +196,7 @@ install "${INSTALL_BUILD_MAUIKIT_PKGS[@]}"
 
 INSTALL_DESKTOP_INTEGRATION_PKGS=(
     luv-icon-theme
-    plasma-workspace
+    plasma-integration
 )
 
 install "${INSTALL_DESKTOP_INTEGRATION_PKGS[@]}"
