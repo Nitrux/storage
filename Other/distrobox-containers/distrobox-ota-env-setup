@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 <Uri Herrera <uri_herrera@nxos.org>>
+
+set -eu
+
+
+# -- Environment variables.
+
+export DEBIAN_FRONTEND=noninteractive
+
+
+# -- Check if APT exists.
+
+if ! command -v apt >/dev/null 2>&1; then
+    echo "Error: 'apt' command not found. Please make sure it's available and try again, quitting."
+    exit 1
+fi
+
+
+# -- Add APT configuration.
+#   -- Remove source definitions inherited from the base image. Keeping them
+#   -- active can mix Debian stable packages with the testing snapshot below.
+
+rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
+
+cp -r "$PWD"/container-setup/configs/files/apt_preferences/* /etc/apt/preferences.d/
+cp -r "$PWD"/container-setup/configs/files/apt_conf/* /etc/apt/apt.conf.d/
+
+
+# -- Source APT commands as functions.
+# shellcheck source=/dev/null
+
+source "$PWD"/container-setup/configs/scripts/others/apt-funcs
+
+
+# -- Add Nitrux repository keys.
+
+add_nitrux_key testing
+add_nitrux_key area51
+add_nitrux_key skidrow
+add_nitrux_key mauikit
+
+
+# -- Add build sources.
+
+cp "$PWD"/container-setup/configs/files/sources/{debian,nitrux-ota}.sources /etc/apt/sources.list.d/
+
+
+# -- Neutralize systemd-tmpfiles completely.
+#   -- When apt installs or upgrades systemd, dpkg executes the package maintainer script (postinst). 
+#   -- This script runs systemd-tmpfiles --create to set strict ownership and permissions on system directories.
+#   -- The configuration file /usr/lib/tmpfiles.d/tmp.conf instructs systemd-tmpfiles to manage /tmp. 
+#   -- Because Distrobox bind-mounts the host /tmp directory into the container, the kernel blocks an unprivileged user namespace from altering host mount permissions.
+#   -- Systemd treats this failure as fatal, causing dpkg to exit with an error.
+
+dpkg_divert /usr/bin/systemd-tmpfiles
+ln -sf /bin/true /usr/bin/systemd-tmpfiles
+
+
+# -- Divert rev while util-linux and bsdextrautils transition ownership.
+#   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils
+#   -- packages install the same path. Record the diversion without renaming
+#   -- the existing executable because util-linux marks it Essential.
+
+dpkg-divert --local --no-rename --add /usr/bin/rev
+
+
+# -- Refresh package indexes after all diversions are registered.
+
+update
+
+
+# -- Align libexpat with the testing snapshot before the full upgrade.
+
+install_downgrades libexpat1=2.8.2-1
+
+
+# -- Upgrade rootfs packages as a coordinated dependency transition.
+#   -- apt upgrade/--only-upgrade can unpack libraries without upgrading the
+#   -- packages that must match them (for example libsmartcols and util-linux).
+
+dist_upgrade_brute_force
+dpkg_conf
+
+
+# -- Update apt-file index.
+
+db_file_update
+
+
+# -- Cleanup packages.
+
+autoremove
