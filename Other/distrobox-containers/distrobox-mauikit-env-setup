@@ -20,8 +20,7 @@ fi
 
 
 # -- Add APT configuration.
-#   -- Remove source definitions inherited from the base image. Keeping them
-#   -- active can mix Debian stable packages with the testing snapshot below.
+#   -- Remove source definitions inherited from the base image. Keeping them active can mix Debian stable packages with the testing snapshot below.
 
 rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
 
@@ -58,9 +57,8 @@ ln -sf /bin/true /usr/bin/systemd-tmpfiles
 
 
 # -- Divert rev while util-linux and bsdextrautils transition ownership.
-#   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils
-#   -- packages install the same path. Record the diversion without renaming
-#   -- the existing executable because util-linux marks it Essential.
+#   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils packages install the same path.
+#   -- Record the diversion without renaming the existing executable because util-linux marks it Essential.
 
 dpkg-divert --local --no-rename --add /usr/bin/rev
 
@@ -76,8 +74,7 @@ install_downgrades libexpat1=2.8.2-1
 
 
 # -- Upgrade rootfs packages as a coordinated dependency transition.
-#   -- apt upgrade/--only-upgrade can unpack libraries without upgrading the
-#   -- packages that must match them (for example libsmartcols and util-linux).
+#   -- apt upgrade/--only-upgrade can unpack libraries without upgrading the packages that must match them (for example libsmartcols and util-linux).
 
 dist_upgrade_brute_force
 dpkg_conf
