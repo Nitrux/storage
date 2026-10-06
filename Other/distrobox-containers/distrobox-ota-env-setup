@@ -41,6 +41,7 @@ add_nitrux_key testing
 add_nitrux_key area51
 add_nitrux_key skidrow
 add_nitrux_key mauikit
+add_nitrux_key nvidia
 
 
 # -- Add build sources.
@@ -65,6 +66,15 @@ ln -sf /bin/true /usr/bin/systemd-tmpfiles
 #   -- the existing executable because util-linux marks it Essential.
 
 dpkg-divert --local --no-rename --add /usr/bin/rev
+
+
+# -- Install packages.
+
+INSTALL_PKGS=(
+    apt-file
+)
+
+install "${INSTALL_PKGS[@]}"
 
 
 # -- Refresh package indexes after all diversions are registered.
