@@ -70,7 +70,10 @@ dpkg-divert --local --no-rename --add /usr/bin/rev
 
 INSTALL_PKGS=(
     apt-file
+    equivs
     pipx
+    mksquashfs
+    zstd
 )
 
 install "${INSTALL_PKGS[@]}"
