@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 <Nitrux Latinoamericana S.C. <hello@nxos.org>>
+
+
+# -- Exit on errors.
+
 set -euo pipefail
 
 usage() {
@@ -110,7 +116,19 @@ printf "%b\n" \
 	"\t\t\tesac" \
 	"" \
 	"\t\t\tif [ -f \"\$path\" ] || [ -L \"\$path\" ]; then" \
-	"\t\t\t\tif ! /usr/bin/dpkg-query -S \"\$path\" >/dev/null 2>&1; then" \
+	"\t\t\t\towners=\$(/usr/bin/dpkg-query -S \"\$path\" 2>/dev/null || :)" \
+	"\t\t\t\towned_by_other_package=false" \
+	"\t\t\t\twhile IFS= read -r owner; do" \
+	"\t\t\t\t\t[ -n \"\$owner\" ] || continue" \
+	"\t\t\t\t\tcase \"\$owner\" in" \
+	"\t\t\t\t\t\t\"\$package_id: \"*) ;;" \
+	"\t\t\t\t\t\t*) owned_by_other_package=true; break ;;" \
+	"\t\t\t\t\tesac" \
+	"\t\t\t\tdone <<EOF" \
+"\$owners" \
+"EOF" \
+"" \
+	"\t\t\t\tif [ \"\$owned_by_other_package\" = false ]; then" \
 	"\t\t\t\t\t/bin/rm -f -- \"\$path\"" \
 	"\t\t\t\tfi" \
 	"\t\t\tfi" \
