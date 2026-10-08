@@ -72,6 +72,7 @@ INSTALL_PKGS=(
     apt-file
     equivs
     pipx
+    python3-gnupg
     mksquashfs
     zstd
 )
