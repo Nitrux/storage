@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2024-2025 <Nitrux Latinoamericana S.C. <hello@nxos.org>>
+
+
+# -- Exit on errors.
+
+set -euo pipefail
+
+
+# -- Variables.
+
+KERNEL_VERSION="${KERNEL_VERSION:-$(uname -r)}"
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$WORK_DIR"' EXIT
+
+export LLVM=1
+
+
+# -- Functions.
+
+build_dkms()
+{
+    local repo="$1"
+    local module="$2"
+    local version="$3"
+    local source_dir="$4"
+    local source_subdir="${5:-.}"
+    local clone_dir="$WORK_DIR/$module"
+
+    git clone --depth 1 "$repo" "$clone_dir"
+
+    mkdir -p "$source_dir"
+    cp -a "$clone_dir/$source_subdir"/. "$source_dir"/
+
+    dkms add -m "$module" -v "$version"
+    dkms build -m "$module" -v "$version" -k "$KERNEL_VERSION"
+    dkms install --force -m "$module" -v "$version" -k "$KERNEL_VERSION"
+}
+
+
+# -- Build the drivers with dkms.
+
+build_dkms \
+    https://github.com/Nitrux/zenergy.git \
+    zenergy \
+    1.0 \
+    /usr/src/zenergy-1.0
+
+build_dkms \
+    https://github.com/Nitrux/asix-ax88179-dkms.git \
+    asix-ax88179 \
+    3.4.0 \
+    /usr/src/asix-ax88179-3.4.0
+
+install -D -m 0644 \
+    "$WORK_DIR/asix-ax88179/asix-ax88179.conf" \
+    /etc/modprobe.d/asix-ax88179.conf
+
+build_dkms \
+    https://github.com/Nitrux/broadcom-sta-dkms.git \
+    broadcom-wl \
+    6.30.223.271 \
+    /usr/src/broadcom-wl-6.30.223.271 \
+    usr/src/broadcom-sta-6.30.223.271
+
+install -D -m 0644 \
+    "$WORK_DIR/broadcom-wl/etc/modprobe.d/broadcom-sta-dkms.conf" \
+    /etc/modprobe.d/broadcom-sta-dkms.conf
+
+mkdir -p /etc/modules-load.d
+printf '%s\n' zenergy > /etc/modules-load.d/zenergy.conf
