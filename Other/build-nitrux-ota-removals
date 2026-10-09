@@ -9,13 +9,13 @@
 set -euo pipefail
 
 usage() {
-	printf "%s\n" "Usage: $0 --var-db-old FILE --removed-list FILE [--removed-list FILE ...] [--workspace-transition-6.1.0-to-7.0.0] [--output-dir DIRECTORY]"
+	printf "%s\n" "Usage: $0 --var-db-old FILE --var-db-new FILE --removed-list FILE [--removed-list FILE ...] [--output-dir DIRECTORY]"
 }
 
 output_dir="$PWD"
 var_db_old=""
+var_db_new=""
 removed_lists=()
-workspace_transition_610_to_700=false
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -28,14 +28,19 @@ while [ "$#" -gt 0 ]; do
 			var_db_old=$2
 			shift 2
 			;;
+		--var-db-new)
+			[ "$#" -ge 2 ] || { usage >&2; exit 2; }
+			[ -z "$var_db_new" ] || {
+				printf "%s\n" "--var-db-new may only be specified once." >&2
+				exit 2
+			}
+			var_db_new=$2
+			shift 2
+			;;
 		--removed-list)
 			[ "$#" -ge 2 ] || { usage >&2; exit 2; }
 			removed_lists+=("$2")
 			shift 2
-			;;
-		--workspace-transition-6.1.0-to-7.0.0)
-			workspace_transition_610_to_700=true
-			shift
 			;;
 		--output-dir|-o)
 			[ "$#" -ge 2 ] || { usage >&2; exit 2; }
@@ -64,6 +69,17 @@ done
 	exit 1
 }
 
+[ -n "$var_db_new" ] || {
+	printf "%s\n" "--var-db-new is required." >&2
+	usage >&2
+	exit 2
+}
+
+[ -f "$var_db_new" ] || {
+	printf "Missing new dpkg database archive: %s\n" "$var_db_new" >&2
+	exit 1
+}
+
 [ "${#removed_lists[@]}" -gt 0 ] || {
 	printf "%s\n" "At least one --removed-list is required." >&2
 	usage >&2
@@ -82,7 +98,7 @@ case "$output_dir" in
 	*) output_dir="$PWD/$output_dir" ;;
 esac
 
-for command in awk cmp dpkg-deb tar; do
+for command in awk cmp comm dpkg-deb sort tar; do
 	command -v "$command" >/dev/null 2>&1 || {
 		printf "Missing required command: %s\n" "$command" >&2
 		exit 1
@@ -114,67 +130,104 @@ work_dir=$(mktemp -d)
 trap 'rm -rf -- "$work_dir"' EXIT
 
 package_root="$work_dir/package"
-embedded_lists_dir="$package_root/usr/share/nitrux-ota-removals/lists"
-mkdir -p -- "$package_root/DEBIAN" "$embedded_lists_dir"
+data_dir="$package_root/usr/share/nitrux-ota-removals"
+old_info_dir="$work_dir/old-info"
+new_info_dir="$work_dir/new-info"
+mkdir -p -- "$package_root/DEBIAN" "$data_dir" "$old_info_dir" "$new_info_dir"
 
-archive_index="$work_dir/archive-members"
-if ! tar --absolute-names -tf "$var_db_old" > "$archive_index"; then
-	printf "Unable to read old dpkg database archive: %s\n" "$var_db_old" >&2
+extract_package_lists() {
+	archive=$1
+	destination=$2
+	description=$3
+	if ! tar -xf "$archive" -C "$destination" \
+		--wildcards '/var/lib/dpkg/info/*.list' \
+		--transform='s#^/var/lib/dpkg/info/##'; then
+		printf "Unable to extract package file lists from %s dpkg database archive: %s\n" "$description" "$archive" >&2
+		exit 1
+	fi
+	set -- "$destination"/*.list
+	[ -f "$1" ] || {
+		printf "No package file lists found in %s dpkg database archive: %s\n" "$description" "$archive" >&2
+		exit 1
+	}
+	if ! awk 'NF && $0 !~ /^\// { exit 1 }' "$destination"/*.list; then
+		printf "A package file list in the %s dpkg database contains a non-absolute path: %s\n" "$description" "$archive" >&2
+		exit 1
+	fi
+}
+
+extract_package_lists "$var_db_old" "$old_info_dir" old
+extract_package_lists "$var_db_new" "$new_info_dir" new
+
+if ! tar -xf "$var_db_new" -C "$new_info_dir" \
+	--wildcards '/var/lib/dpkg/info/*.conffiles' \
+	--transform='s#^/var/lib/dpkg/info/##'; then
+	printf "Unable to extract conffile metadata from new dpkg database archive: %s\n" "$var_db_new" >&2
 	exit 1
 fi
 
-declare -A embedded_list_set=()
-embedded_list_names=()
+set -- "$new_info_dir"/*.conffiles
+[ -f "$1" ] || {
+	printf "No conffile metadata found in new dpkg database archive: %s\n" "$var_db_new" >&2
+	exit 1
+}
+
+old_removed_paths="$work_dir/old-removed-paths"
+new_owned_paths="$work_dir/new-owned-paths"
+removal_manifest="$data_dir/paths-to-remove"
+conffile_manifest="$data_dir/conffiles-to-promote"
+conffile_owner_manifest="$data_dir/conffile-owners"
+conffile_owner_candidates="$work_dir/conffile-owner-candidates"
+: > "$old_removed_paths"
+: > "$conffile_owner_candidates"
 
 for package in "${removed_packages[@]}"; do
 	found_package_list=false
-
-	while IFS= read -r archive_member || [ -n "$archive_member" ]; do
-		normalized_member=${archive_member#./}
-		normalized_member=${normalized_member#/}
-
-		case "$normalized_member" in
-			"var/lib/dpkg/info/$package.list"|"var/lib/dpkg/info/$package":*.list)
-				found_package_list=true
-				list_name=${normalized_member##*/}
-
-				if [ -n "${embedded_list_set[$list_name]+x}" ]; then
-					continue
-				fi
-
-				destination="$embedded_lists_dir/$list_name"
-				if ! tar --absolute-names -xOf "$var_db_old" "$archive_member" > "$destination"; then
-					printf "Unable to extract package file list: %s\n" "$archive_member" >&2
-					exit 1
-				fi
-
-				[ -s "$destination" ] || {
-					printf "Package file list is empty: %s\n" "$archive_member" >&2
-					exit 1
-				}
-
-				if ! awk 'NF && $0 !~ /^\// { exit 1 }' "$destination"; then
-					printf "Package file list contains a non-absolute path: %s\n" "$archive_member" >&2
-					exit 1
-				fi
-
-				chmod 0644 "$destination"
-				embedded_list_set["$list_name"]=1
-				embedded_list_names+=("$list_name")
-				;;
-		esac
-	done < "$archive_index"
-
+	candidate_lists=("$old_info_dir/$package.list")
+	case "$package" in
+		*:*) ;;
+		*) candidate_lists+=("$old_info_dir/$package":*.list) ;;
+	esac
+	for source_list in "${candidate_lists[@]}"; do
+		[ -f "$source_list" ] || continue
+		found_package_list=true
+		awk 'NF { print }' "$source_list" >> "$old_removed_paths"
+	done
 	[ "$found_package_list" = true ] || {
 		printf "No package file list found in %s for removed package: %s\n" "$var_db_old" "$package" >&2
 		exit 1
 	}
 done
 
-[ "${#embedded_list_names[@]}" -gt 0 ] || {
-	printf "%s\n" "No package file lists were embedded." >&2
+LC_ALL=C sort -u -o "$old_removed_paths" "$old_removed_paths"
+awk 'NF { print }' "$new_info_dir"/*.list | LC_ALL=C sort -u > "$new_owned_paths"
+LC_ALL=C comm -23 "$old_removed_paths" "$new_owned_paths" > "$removal_manifest"
+
+if ! awk -v owners="$conffile_owner_candidates" '
+	NF {
+		if ($1 ~ /^\//) {
+			print $1
+			owner = FILENAME
+			sub(/^.*\//, "", owner)
+			sub(/\.conffiles$/, "", owner)
+			print owner > owners
+			next
+		}
+		if ($1 == "remove-on-upgrade" && $2 ~ /^\//) {
+			next
+		}
+		printf "Invalid conffile record in %s at line %s: %s\n", FILENAME, FNR, $0 > "/dev/stderr"
+		invalid = 1
+	}
+	END { exit invalid }
+' "$new_info_dir"/*.conffiles | LC_ALL=C sort -u > "$conffile_manifest"; then
+	printf "%s\n" "Unable to generate the target conffile manifest." >&2
 	exit 1
-}
+fi
+
+LC_ALL=C sort -u "$conffile_owner_candidates" > "$conffile_owner_manifest"
+
+chmod 0644 "$removal_manifest" "$conffile_manifest" "$conffile_owner_manifest"
 
 postinst="$package_root/DEBIAN/postinst"
 cat > "$postinst" <<'POSTINST'
@@ -184,227 +237,101 @@ set -eu
 
 [ "${1:-}" = configure ] || exit 0
 
-lists_dir=/usr/share/nitrux-ota-removals/lists
+removal_manifest=/usr/share/nitrux-ota-removals/paths-to-remove
+conffile_manifest=/usr/share/nitrux-ota-removals/conffiles-to-promote
+conffile_owner_manifest=/usr/share/nitrux-ota-removals/conffile-owners
 
-if [ ! -d "$lists_dir" ]; then
-	printf "nitrux-ota-removals: missing embedded package file lists: %s\n" "$lists_dir" >&2
+if [ ! -f "$removal_manifest" ]; then
+	printf "nitrux-ota-removals: missing removal manifest: %s\n" "$removal_manifest" >&2
 	exit 1
 fi
-
+if [ ! -f "$conffile_manifest" ]; then
+	printf "nitrux-ota-removals: missing conffile manifest: %s\n" "$conffile_manifest" >&2
+	exit 1
+fi
+if [ ! -f "$conffile_owner_manifest" ]; then
+	printf "nitrux-ota-removals: missing conffile owner manifest: %s\n" "$conffile_owner_manifest" >&2
+	exit 1
+fi
 if [ ! -x /usr/bin/dpkg-query ]; then
 	printf "%s\n" "nitrux-ota-removals: /usr/bin/dpkg-query is unavailable." >&2
 	exit 1
 fi
-
 if [ ! -x /usr/bin/sort ]; then
 	printf "%s\n" "nitrux-ota-removals: /usr/bin/sort is unavailable." >&2
 	exit 1
 fi
 
-owner_list_has_other_package() {
-	checked_package_id=$1
-	checked_owner_list=$2
-	saved_ifs=$IFS
-	IFS=,
-
-	for checked_owner_package in $checked_owner_list; do
-		IFS=$saved_ifs
-		checked_owner_package=${checked_owner_package#"${checked_owner_package%%[![:space:]]*}"}
-		checked_owner_package=${checked_owner_package%"${checked_owner_package##*[![:space:]]}"}
-		[ -n "$checked_owner_package" ] || {
-			IFS=,
-			continue
-		}
-
-		case "$checked_package_id" in
-			*:*)
-				[ "$checked_owner_package" = "$checked_package_id" ] && {
-					IFS=,
-					continue
-				}
-				;;
+while IFS= read -r package || [ -n "$package" ]; do
+	[ -n "$package" ] || continue
+	if package_status=$(/usr/bin/dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null); then
+		case "$package_status" in
+			installed|triggers-awaited|triggers-pending) ;;
 			*)
-				[ "${checked_owner_package%%:*}" = "$checked_package_id" ] && {
-					IFS=,
-					continue
-				}
+				printf "nitrux-ota-removals: deferring until %s is configured (current state: %s).\n" \
+					"$package" "$package_status" >&2
+				exit 1
 				;;
 		esac
-
-		IFS=$saved_ifs
-		return 0
-	done
-
-	IFS=$saved_ifs
-	return 1
-}
-
-path_is_owned_by_other_package() {
-	checked_package_id=$1
-	checked_path=$2
-
-	if checked_owners=$(/usr/bin/dpkg-query -S "$checked_path" 2>/dev/null); then
-		:
 	else
-		query_status=$?
-		if [ "$query_status" -ne 1 ]; then
-			printf "nitrux-ota-removals: dpkg-query failed for %s with status %s.\n" "$checked_path" "$query_status" >&2
-			return "$query_status"
-		fi
-		checked_owners=""
+		printf "nitrux-ota-removals: unable to query conffile owner: %s.\n" "$package" >&2
+		exit 1
 	fi
+done < "$conffile_owner_manifest"
 
-	while IFS= read -r owner_line; do
-		[ -n "$owner_line" ] || continue
-		reported_path=${owner_line#*: }
-		[ "$reported_path" = "$checked_path" ] || continue
-		owner_packages=${owner_line%%: /*}
-
-		if owner_list_has_other_package "$checked_package_id" "$owner_packages"; then
-			return 0
-		fi
-	done <<EOF
-$checked_owners
-EOF
-
-	return 1
-}
-
-processed_lists=0
 removed_files=0
-preserved_files=0
+while IFS= read -r path || [ -n "$path" ]; do
+	case "$path" in
+		/|/.) continue ;;
+		/*) ;;
+		*) continue ;;
+	esac
+	if { [ -e "$path" ] || [ -L "$path" ]; } && { [ ! -d "$path" ] || [ -L "$path" ]; }; then
+		/bin/rm -f -- "$path"
+		removed_files=$((removed_files + 1))
+	fi
+done < "$removal_manifest"
 
-set -- "$lists_dir"/*.list
-[ -f "$1" ] || {
-	printf "%s\n" "nitrux-ota-removals: no embedded package file lists found." >&2
-	exit 1
-}
-
-for list_file do
-	[ -f "$list_file" ] || continue
-
-	package_id=${list_file##*/}
-	package_id=${package_id%.list}
-	processed_lists=$((processed_lists + 1))
-
-	while IFS= read -r path || [ -n "$path" ]; do
-		case "$path" in
-			/*) ;;
-			*) continue ;;
-		esac
-
-		if { [ -e "$path" ] || [ -L "$path" ]; } && [ ! -d "$path" ]; then
-			if path_is_owned_by_other_package "$package_id" "$path"; then
-				preserved_files=$((preserved_files + 1))
-			else
-				query_status=$?
-				[ "$query_status" -eq 1 ] || exit 1
-				/bin/rm -f -- "$path"
-				removed_files=$((removed_files + 1))
-			fi
-		fi
-	done < "$list_file"
-
-	LC_ALL=C /usr/bin/sort -r -u "$list_file" |
-	while IFS= read -r path || [ -n "$path" ]; do
-		case "$path" in
-			/|/.) continue ;;
-			/*) ;;
-			*) continue ;;
-		esac
-
-		[ -d "$path" ] && [ ! -L "$path" ] || continue
-
-		if path_is_owned_by_other_package "$package_id" "$path"; then
-			continue
-		else
-			query_status=$?
-			[ "$query_status" -eq 1 ] || exit 1
-		fi
-		/bin/rmdir -- "$path" 2>/dev/null || :
-	done
-
-	for info_file in "/var/lib/dpkg/info/$package_id".*; do
-		[ -e "$info_file" ] || [ -L "$info_file" ] || continue
-		/bin/rm -f -- "$info_file"
-	done
+LC_ALL=C /usr/bin/sort -r -u "$removal_manifest" |
+while IFS= read -r path || [ -n "$path" ]; do
+	case "$path" in
+		/|/.) continue ;;
+		/*) ;;
+		*) continue ;;
+	esac
+	[ -d "$path" ] && [ ! -L "$path" ] || continue
+	/bin/rmdir -- "$path" 2>/dev/null || :
 done
 
-POSTINST
-
-if [ "$workspace_transition_610_to_700" = true ]; then
-	cat >> "$postinst" <<'POSTINST_610_TO_700'
-
-# -- Begin Nitrux 6.1.0 to 7.0.0 workspace transition.
+# -- Begin temporary dpkg conffile activation workaround.
 #
-# This block is included only with --workspace-transition-6.1.0-to-7.0.0.
-# Remove it and its builder option after this update path is no longer supported.
+# Remove this block after nuts-cpp invokes dpkg with --force-confnew.
 
-require_cycle_package_configured() {
-	cycle_package=$1
+promoted_conffiles=0
+while IFS= read -r destination || [ -n "$destination" ]; do
+	case "$destination" in
+		/*) ;;
+		*) continue ;;
+	esac
 
-	if cycle_package_status=$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev}' "$cycle_package" 2>/dev/null); then
-		:
-	else
-		printf "nitrux-ota-removals: unable to query transition dependency: %s\n" "$cycle_package" >&2
-		exit 1
+	source=${destination}.dpkg-dist
+	if [ -f "$source" ] || [ -L "$source" ]; then
+		/bin/mv -f -- "$source" "$destination"
+		promoted_conffiles=$((promoted_conffiles + 1))
+		printf "nitrux-ota-removals: activated %s.\n" "$destination"
 	fi
+done < "$conffile_manifest"
 
-	[ "$cycle_package_status" = "ii " ] || {
-		printf "nitrux-ota-removals: transition dependency is not configured: %s (%s)\n" "$cycle_package" "$cycle_package_status" >&2
-		exit 1
-	}
-}
+# -- End temporary dpkg conffile activation workaround.
 
-require_cycle_package_configured nitrux-desktop-settings
-require_cycle_package_configured nitrux-qmlgreet-settings
-
-promote_cycle_conffile() {
-	cycle_source=$1
-	cycle_destination=$2
-
-	[ -f "$cycle_source" ] || return 0
-	/bin/mv -f -- "$cycle_source" "$cycle_destination"
-	printf "nitrux-ota-removals: activated %s.\n" "$cycle_destination"
-}
-
-promote_cycle_conffile /etc/qmlgreet/qmlgreet.conf.dpkg-dist /etc/qmlgreet/qmlgreet.conf
-promote_cycle_conffile /etc/greetd/hyprland.lua.dpkg-dist /etc/greetd/hyprland.lua
-promote_cycle_conffile /etc/greetd/hyprpaper.conf.dpkg-dist /etc/greetd/hyprpaper.conf
-promote_cycle_conffile /etc/skel/.config/hypr/hyprland.lua.dpkg-dist /etc/skel/.config/hypr/hyprland.lua
-promote_cycle_conffile /etc/skel/.config/hypr/hyprpaper.conf.dpkg-dist /etc/skel/.config/hypr/hyprpaper.conf
-
-system_greetd_hypr_config=/etc/greetd/hyprland.lua
-active_greetd_hypr_config=/var/lib/greetd/.config/hypr/hyprland.lua
-
-[ -f "$system_greetd_hypr_config" ] || {
-	printf "nitrux-ota-removals: missing greetd Hyprland configuration: %s\n" "$system_greetd_hypr_config" >&2
-	exit 1
-}
-
-/bin/mkdir -p -- "${active_greetd_hypr_config%/*}"
-/bin/cp -f -- "$system_greetd_hypr_config" "$active_greetd_hypr_config"
-/bin/chown _greetd:_greetd "$active_greetd_hypr_config"
-
-printf "%s\n" "nitrux-ota-removals: completed the Nitrux 6.1.0 to 7.0.0 workspace transition."
-
-# -- End Nitrux 6.1.0 to 7.0.0 workspace transition.
-POSTINST_610_TO_700
-fi
-
-cat >> "$postinst" <<'POSTINST'
-
-printf "nitrux-ota-removals: processed %s package list(s), removed %s file(s), preserved %s target-owned file(s).\n" \
-	"$processed_lists" "$removed_files" "$preserved_files"
+printf "nitrux-ota-removals: removed %s file(s), activated %s configuration file(s).\n" \
+	"$removed_files" "$promoted_conffiles"
 
 exit 0
 POSTINST
 chmod 0755 "$postinst"
 
-conflicts=$(printf "%s, " "${removed_packages[@]}")
-conflicts=${conflicts%, }
-
-version="0.0.3-$(date +%Y%m%d%H%M%S)"
+version="0.0.8-$(date +%Y%m%d%H%M%S)"
 control="$package_root/DEBIAN/control"
 printf "%s\n" \
 	"Package: nitrux-ota-removals" \
@@ -414,21 +341,9 @@ printf "%s\n" \
 	"Section: oldlibs" \
 	"Priority: optional" \
 	"Multi-Arch: foreign" \
-	> "$control"
-
-# -- Begin dependency ordering for the Nitrux 6.1.0 to 7.0.0 workspace transition.
-# Remove this block with the matching postinst block when support for that path ends.
-if [ "$workspace_transition_610_to_700" = true ]; then
-	printf "%s\n" "Depends: nitrux-desktop-settings, nitrux-qmlgreet-settings" >> "$control"
-fi
-# -- End dependency ordering for the Nitrux 6.1.0 to 7.0.0 workspace transition.
-
-printf "%s\n" \
 	"Homepage: https://nxos.org" \
-	"Conflicts: $conflicts" \
-	"Replaces: $conflicts" \
-	"Description: Remove packages omitted from a Nitrux OTA target." \
-	>> "$control"
+	"Description: Remove files omitted from a Nitrux OTA target and activate new configuration files." \
+	> "$control"
 chmod 0644 "$control"
 
 package_deb="$work_dir/nitrux-ota-removals_${version}_all.deb"
@@ -459,21 +374,20 @@ cmp -s "$control" "$audit_dir/DEBIAN/control" || {
 	exit 1
 }
 
-for list_name in "${embedded_list_names[@]}"; do
-	embedded_list="$embedded_lists_dir/$list_name"
-	audited_list="$audit_dir/usr/share/nitrux-ota-removals/lists/$list_name"
-
-	[ -f "$audited_list" ] || {
-		printf "Built package is missing embedded file list: %s\n" "$list_name" >&2
+for data_file in paths-to-remove conffiles-to-promote conffile-owners; do
+	[ -f "$audit_dir/usr/share/nitrux-ota-removals/$data_file" ] || {
+		printf "Built package is missing embedded data file: %s\n" "$data_file" >&2
 		exit 1
 	}
-
-	cmp -s "$embedded_list" "$audited_list" || {
-		printf "Built package file list differs from its source: %s\n" "$list_name" >&2
+	cmp -s "$data_dir/$data_file" "$audit_dir/usr/share/nitrux-ota-removals/$data_file" || {
+		printf "Built package data file differs from its source: %s\n" "$data_file" >&2
 		exit 1
 	}
 done
 
 cp -- "$package_deb" "$output_dir/"
-printf "Wrote %s with %s embedded package file list(s).\n" \
-	"$output_dir/$(basename "$package_deb")" "${#embedded_list_names[@]}"
+printf "Wrote %s with %s removal path(s), %s target conffile path(s), and %s conffile owner(s).\n" \
+	"$output_dir/$(basename "$package_deb")" \
+	"$(awk 'END { print NR }' "$removal_manifest")" \
+	"$(awk 'END { print NR }' "$conffile_manifest")" \
+	"$(awk 'END { print NR }' "$conffile_owner_manifest")"
