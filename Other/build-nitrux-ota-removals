@@ -159,27 +159,10 @@ extract_package_lists() {
 extract_package_lists "$var_db_old" "$old_info_dir" old
 extract_package_lists "$var_db_new" "$new_info_dir" new
 
-if ! tar -xf "$var_db_new" -C "$new_info_dir" \
-	--wildcards '/var/lib/dpkg/info/*.conffiles' \
-	--transform='s#^/var/lib/dpkg/info/##'; then
-	printf "Unable to extract conffile metadata from new dpkg database archive: %s\n" "$var_db_new" >&2
-	exit 1
-fi
-
-set -- "$new_info_dir"/*.conffiles
-[ -f "$1" ] || {
-	printf "No conffile metadata found in new dpkg database archive: %s\n" "$var_db_new" >&2
-	exit 1
-}
-
 old_removed_paths="$work_dir/old-removed-paths"
 new_owned_paths="$work_dir/new-owned-paths"
 removal_manifest="$data_dir/paths-to-remove"
-conffile_manifest="$data_dir/conffiles-to-promote"
-conffile_owner_manifest="$data_dir/conffile-owners"
-conffile_owner_candidates="$work_dir/conffile-owner-candidates"
 : > "$old_removed_paths"
-: > "$conffile_owner_candidates"
 
 for package in "${removed_packages[@]}"; do
 	found_package_list=false
@@ -203,31 +186,7 @@ LC_ALL=C sort -u -o "$old_removed_paths" "$old_removed_paths"
 awk 'NF { print }' "$new_info_dir"/*.list | LC_ALL=C sort -u > "$new_owned_paths"
 LC_ALL=C comm -23 "$old_removed_paths" "$new_owned_paths" > "$removal_manifest"
 
-if ! awk -v owners="$conffile_owner_candidates" '
-	NF {
-		if ($1 ~ /^\//) {
-			print $1
-			owner = FILENAME
-			sub(/^.*\//, "", owner)
-			sub(/\.conffiles$/, "", owner)
-			print owner > owners
-			next
-		}
-		if ($1 == "remove-on-upgrade" && $2 ~ /^\//) {
-			next
-		}
-		printf "Invalid conffile record in %s at line %s: %s\n", FILENAME, FNR, $0 > "/dev/stderr"
-		invalid = 1
-	}
-	END { exit invalid }
-' "$new_info_dir"/*.conffiles | LC_ALL=C sort -u > "$conffile_manifest"; then
-	printf "%s\n" "Unable to generate the target conffile manifest." >&2
-	exit 1
-fi
-
-LC_ALL=C sort -u "$conffile_owner_candidates" > "$conffile_owner_manifest"
-
-chmod 0644 "$removal_manifest" "$conffile_manifest" "$conffile_owner_manifest"
+chmod 0644 "$removal_manifest"
 
 postinst="$package_root/DEBIAN/postinst"
 cat > "$postinst" <<'POSTINST'
@@ -238,46 +197,15 @@ set -eu
 [ "${1:-}" = configure ] || exit 0
 
 removal_manifest=/usr/share/nitrux-ota-removals/paths-to-remove
-conffile_manifest=/usr/share/nitrux-ota-removals/conffiles-to-promote
-conffile_owner_manifest=/usr/share/nitrux-ota-removals/conffile-owners
 
 if [ ! -f "$removal_manifest" ]; then
 	printf "nitrux-ota-removals: missing removal manifest: %s\n" "$removal_manifest" >&2
-	exit 1
-fi
-if [ ! -f "$conffile_manifest" ]; then
-	printf "nitrux-ota-removals: missing conffile manifest: %s\n" "$conffile_manifest" >&2
-	exit 1
-fi
-if [ ! -f "$conffile_owner_manifest" ]; then
-	printf "nitrux-ota-removals: missing conffile owner manifest: %s\n" "$conffile_owner_manifest" >&2
-	exit 1
-fi
-if [ ! -x /usr/bin/dpkg-query ]; then
-	printf "%s\n" "nitrux-ota-removals: /usr/bin/dpkg-query is unavailable." >&2
 	exit 1
 fi
 if [ ! -x /usr/bin/sort ]; then
 	printf "%s\n" "nitrux-ota-removals: /usr/bin/sort is unavailable." >&2
 	exit 1
 fi
-
-while IFS= read -r package || [ -n "$package" ]; do
-	[ -n "$package" ] || continue
-	if package_status=$(/usr/bin/dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null); then
-		case "$package_status" in
-			installed|triggers-awaited|triggers-pending) ;;
-			*)
-				printf "nitrux-ota-removals: deferring until %s is configured (current state: %s).\n" \
-					"$package" "$package_status" >&2
-				exit 1
-				;;
-		esac
-	else
-		printf "nitrux-ota-removals: unable to query conffile owner: %s.\n" "$package" >&2
-		exit 1
-	fi
-done < "$conffile_owner_manifest"
 
 removed_files=0
 while IFS= read -r path || [ -n "$path" ]; do
@@ -303,35 +231,13 @@ while IFS= read -r path || [ -n "$path" ]; do
 	/bin/rmdir -- "$path" 2>/dev/null || :
 done
 
-# -- Begin temporary dpkg conffile activation workaround.
-#
-# Remove this block after nuts-cpp invokes dpkg with --force-confnew.
-
-promoted_conffiles=0
-while IFS= read -r destination || [ -n "$destination" ]; do
-	case "$destination" in
-		/*) ;;
-		*) continue ;;
-	esac
-
-	source=${destination}.dpkg-dist
-	if [ -f "$source" ] || [ -L "$source" ]; then
-		/bin/mv -f -- "$source" "$destination"
-		promoted_conffiles=$((promoted_conffiles + 1))
-		printf "nitrux-ota-removals: activated %s.\n" "$destination"
-	fi
-done < "$conffile_manifest"
-
-# -- End temporary dpkg conffile activation workaround.
-
-printf "nitrux-ota-removals: removed %s file(s), activated %s configuration file(s).\n" \
-	"$removed_files" "$promoted_conffiles"
+printf "nitrux-ota-removals: removed %s file(s).\n" "$removed_files"
 
 exit 0
 POSTINST
 chmod 0755 "$postinst"
 
-version="0.0.8-$(date +%Y%m%d%H%M%S)"
+version="0.0.9-$(date +%Y%m%d%H%M%S)"
 control="$package_root/DEBIAN/control"
 printf "%s\n" \
 	"Package: nitrux-ota-removals" \
@@ -342,7 +248,7 @@ printf "%s\n" \
 	"Priority: optional" \
 	"Multi-Arch: foreign" \
 	"Homepage: https://nxos.org" \
-	"Description: Remove files omitted from a Nitrux OTA target and activate new configuration files." \
+	"Description: Remove files omitted from a Nitrux OTA target." \
 	> "$control"
 chmod 0644 "$control"
 
@@ -374,7 +280,7 @@ cmp -s "$control" "$audit_dir/DEBIAN/control" || {
 	exit 1
 }
 
-for data_file in paths-to-remove conffiles-to-promote conffile-owners; do
+for data_file in paths-to-remove; do
 	[ -f "$audit_dir/usr/share/nitrux-ota-removals/$data_file" ] || {
 		printf "Built package is missing embedded data file: %s\n" "$data_file" >&2
 		exit 1
@@ -386,8 +292,6 @@ for data_file in paths-to-remove conffiles-to-promote conffile-owners; do
 done
 
 cp -- "$package_deb" "$output_dir/"
-printf "Wrote %s with %s removal path(s), %s target conffile path(s), and %s conffile owner(s).\n" \
+printf "Wrote %s with %s removal path(s).\n" \
 	"$output_dir/$(basename "$package_deb")" \
 	"$(awk 'END { print NR }' "$removal_manifest")" \
-	"$(awk 'END { print NR }' "$conffile_manifest")" \
-	"$(awk 'END { print NR }' "$conffile_owner_manifest")"
