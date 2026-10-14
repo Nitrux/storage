@@ -88,6 +88,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     automake
     autotools-dev
     build-essential
+    cmake
     curl
     devscripts
     equivs
@@ -107,6 +108,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libcdio-cdda-dev
     libcdio-dev
     libcdio-paranoia-dev
+    libdbus-1-dev
     libexiv2-dev
     libgme-dev
     libgtk-3-dev
@@ -158,6 +160,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libtesseract-dev
     libvorbis-dev
     libwildmidi-dev
+    libwayland-dev
     libxcb-icccm4-dev
     libxcb-shape0-dev
     libxcursor-dev
@@ -173,6 +176,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     qml6-module-qtquick-shapes
     qt6-5compat-dev
     qt6-base-dev
+    qt6-base-dev-tools
     qt6-base-private-dev
     qt6-declarative-dev
     qt6-declarative-private-dev
@@ -180,6 +184,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     qt6-multimedia-dev
     qt6-positioning-dev
     qt6-svg-dev
+    qt6-wayland-private-dev
     qt6-webengine-dev
     ripgrep
     tesseract-ocr-all
@@ -212,6 +217,9 @@ autoremove
 # -- Add generic XDG menu file name, so KApplicationTrader::queryByMimeType(...) finds it.
 
 DEST_DIR="/etc/xdg"
+DEST_FILE="$DEST_DIR/applications.menu"
 MENU_URL="https://raw.githubusercontent.com/Nitrux/nitrux-system-settings/refs/heads/main/etc/xdg/menus/applications.menu"
 
-wget -P "$DEST_DIR" "$MENU_URL"
+if [[ ! -e "$DEST_FILE" ]]; then
+    wget -P "$DEST_DIR" "$MENU_URL"
+fi
