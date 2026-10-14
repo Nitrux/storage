@@ -70,7 +70,7 @@ update
 
 # -- Align libexpat with the testing snapshot before the full upgrade.
 
-install_downgrades libexpat1=2.8.2-1
+install_downgrades libexpat1=2.9.0-1
 
 
 # -- Upgrade rootfs packages as a coordinated dependency transition.
@@ -88,12 +88,9 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     automake
     autotools-dev
     build-essential
-    checkinstall
-    cmake
     curl
     devscripts
     equivs
-    extra-cmake-modules
     ffmpeg
     ffmpegthumbs
     gettext
@@ -166,8 +163,10 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libxcursor-dev
     libyaml-cpp-dev
     lintian
+    meson
     micro
     nlohmann-json3-dev
+    ninja-build
     qcoro-qt6-dev
     qml6-module-qt5compat-graphicaleffects
     qml6-module-qtquick-controls
@@ -210,13 +209,9 @@ db_file_update
 autoremove
 
 
-# -- Create the generic XDG menu file name, so KApplicationTrader::queryByMimeType(...) finds it.
+# -- Add generic XDG menu file name, so KApplicationTrader::queryByMimeType(...) finds it.
 
-XDG_MENU_SRC="/etc/xdg/menus/plasma-applications.menu"
-XDG_MENU_DEST="/etc/xdg/menus/applications.menu"
+DEST_DIR="/etc/xdg"
+MENU_URL="https://raw.githubusercontent.com/Nitrux/nitrux-system-settings/refs/heads/main/etc/xdg/menus/applications.menu"
 
-if [ ! -f "$XDG_MENU_SRC" ]; then
-    echo "Warning: Source file '$XDG_MENU_SRC' does not exist."
-elif [ ! -e "$XDG_MENU_DEST" ] && [ ! -L "$XDG_MENU_DEST" ]; then
-    ln -sv "$XDG_MENU_SRC" "$XDG_MENU_DEST"
-fi
+wget -P "$DEST_DIR" "$MENU_URL"

@@ -37,6 +37,23 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 SUDO_KEEP_ALIVE_PID=$!
 trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT
 
+STAGING_DIR="$USER_HOME/Build/mauikit-build"
+DEB_HOST_MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+STAGED_LIBDIR="$STAGING_DIR/usr/lib/$DEB_HOST_MULTIARCH"
+
+sudo rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+
+export PKG_CONFIG_PATH="$STAGED_LIBDIR/pkgconfig:$STAGING_DIR/usr/lib/pkgconfig:$STAGING_DIR/usr/share/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export CPPFLAGS="-I$STAGING_DIR/usr/include${CPPFLAGS:+ $CPPFLAGS}"
+export LDFLAGS="-L$STAGED_LIBDIR${LDFLAGS:+ $LDFLAGS}"
+export CMAKE_PREFIX_PATH="$STAGING_DIR/usr${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+
+meson_args=(--prefix=/usr --libdir="lib/$DEB_HOST_MULTIARCH" --buildtype=release)
+if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
+    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+fi
+
 for dir in "${REPOS[@]}"; do
     if [[ ! -d "$dir" ]]; then
         echo "Error: Directory not found -> $dir" >&2
@@ -49,13 +66,11 @@ for dir in "${REPOS[@]}"; do
 
     sudo rm -rf "$dir/build"
 
-    cmake -B "$dir/build" -S "$dir" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    cmake --build "$dir/build" -j"$(nproc)"
-    sudo cmake --install "$dir/build"
+    meson setup "$dir/build" "$dir" "${meson_args[@]}"
+    meson compile -C "$dir/build" -j"$(nproc)"
+    DESTDIR="$STAGING_DIR" meson install -C "$dir/build"
 
     echo ""
 done
 
-echo "All components built and installed successfully."
+echo "All components built and staged in: $STAGING_DIR"
