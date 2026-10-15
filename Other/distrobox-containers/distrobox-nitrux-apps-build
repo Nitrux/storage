@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 <Uri Herrera <uri_herrera@nxos.org>>
+
+set -euo pipefail
+
+
+# -- Resolve the target user's home directory even if invoked with sudo.
+
+USER_NAME="${SUDO_USER:-$USER}"
+USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+if [[ -z "$USER_HOME" || "$USER_HOME" == / ]]; then
+    echo "Error: Could not resolve a safe target user home directory." >&2
+    exit 1
+fi
+
+
+# -- Make Qt 6 development tools visible to Meson.
+
+export PATH="/usr/lib/qt6/bin:/usr/lib/qt6/libexec:$PATH"
+
+
+# -- Directories to build in dependency order.
+
+REPOS=(
+    "$USER_HOME/GitHub/Nitrux/appfinder"
+    "$USER_HOME/GitHub/Nitrux/cinderward"
+    "$USER_HOME/GitHub/Nitrux/desklock"
+    "$USER_HOME/GitHub/Nitrux/marina"
+    "$USER_HOME/GitHub/Nitrux/nudge-osd"
+    "$USER_HOME/GitHub/Nitrux/nuts-cpp"
+    "$USER_HOME/GitHub/Nitrux/polkit-nx-agent"
+    "$USER_HOME/GitHub/Nitrux/qmlgreet"
+    "$USER_HOME/GitHub/Nitrux/qmlogout"
+    "$USER_HOME/GitHub/Nitrux/valenz"
+    "$USER_HOME/GitHub/Nitrux/wirecloak"
+    "$USER_HOME/GitHub/Nitrux/xdg-desktop-portal-nx"
+)
+
+
+# -- Authenticate sudo upfront and keep the timestamp alive during the build.
+
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+SUDO_KEEP_ALIVE_PID=$!
+trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT
+
+for dir in "${REPOS[@]}"; do
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: Directory not found -> $dir" >&2
+        exit 1
+    fi
+done
+
+DEB_HOST_MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+INSTALL_PREFIX=/usr
+
+meson_args=(--prefix="$INSTALL_PREFIX" --libdir="lib/$DEB_HOST_MULTIARCH" --buildtype=release)
+if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
+    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+fi
+
+for dir in "${REPOS[@]}"; do
+    project_name="$(basename "$dir")"
+    build_dir="$dir/build"
+
+    echo "=================================================="
+    echo "  Building: $project_name"
+    echo "=================================================="
+
+    sudo rm -rf -- "$build_dir"
+
+    if [[ -f "$dir/meson.build" ]]; then
+        meson setup "$build_dir" "$dir" "${meson_args[@]}"
+        meson compile -C "$build_dir" -j"$(nproc)"
+        sudo env --unset=DESTDIR meson install -C "$build_dir"
+    elif [[ -f "$dir/CMakeLists.txt" ]]; then
+        cmake -S "$dir" -B "$build_dir" \
+            -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+            -DCMAKE_BUILD_TYPE=Release
+        cmake --build "$build_dir" --parallel "$(nproc)"
+        sudo env --unset=DESTDIR cmake --install "$build_dir"
+    else
+        echo "Error: No supported build system found in $dir" >&2
+        exit 1
+    fi
+
+    echo ""
+done
+
+echo "All Nitrux applications built and installed under $INSTALL_PREFIX"
