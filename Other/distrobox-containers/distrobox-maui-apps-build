@@ -33,7 +33,6 @@ REPOS=(
     "$USER_HOME/GitHub/Nitrux/maui-settings"
     "$USER_HOME/GitHub/Nitrux/maui-shelf"
     "$USER_HOME/GitHub/Nitrux/maui-station"
-    "$USER_HOME/GitHub/Nitrux/maui-strike"
     "$USER_HOME/GitHub/Nitrux/maui-vvave"
 )
 
