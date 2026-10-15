@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 <Uri Herrera <uri_herrera@nxos.org>>
+
+set -euo pipefail
+
+
+# -- Resolve the target user home directory even if invoked with sudo.
+
+USER_NAME="${SUDO_USER:-$USER}"
+USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+if [[ -z "$USER_HOME" || "$USER_HOME" == / ]]; then
+    echo "Error: Could not resolve a safe target user home directory." >&2
+    exit 1
+fi
+
+
+# -- Source repositories to copy and build in order.
+
+SOURCE_REPOS=(
+    "$USER_HOME/GitHub/Nitrux/toma"
+    "$USER_HOME/GitHub/Nitrux/vxm"
+    "$USER_HOME/GitHub/Nitrux/nwsm"
+    "$USER_HOME/GitHub/Nitrux/nx-powerd"
+)
+
+
+BUILD_ROOT="$USER_HOME/Build"
+STAGING_ROOT="$BUILD_ROOT/cpack-repos-stating"
+PACKAGES_DIR="$STAGING_ROOT/packages"
+CPACK_WORK_ROOT="$STAGING_ROOT/.cpack"
+
+
+# -- Use the project version unless a package version is supplied by the caller.
+
+PACKAGE_VERSION="${PACKAGE_VERSION:-}"
+TARGET_ARCH="${TARGET_ARCH:-$(dpkg-architecture -qDEB_HOST_ARCH)}"
+
+
+cleanup() {
+    rm -rf "$CPACK_WORK_ROOT"
+    rm -rf "$PACKAGES_DIR/_CPack_Packages"
+
+    if [[ -n "${SUDO_KEEP_ALIVE_PID:-}" ]]; then
+        kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+
+# -- Authenticate sudo upfront and keep the timestamp alive during the build.
+
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+SUDO_KEEP_ALIVE_PID=$!
+
+
+# -- Start every run with a clean staging directory.
+
+sudo rm -rf -- "$STAGING_ROOT"
+
+for source_dir in "${SOURCE_REPOS[@]}"; do
+    if [[ ! -d "$source_dir" ]]; then
+        echo "Error: Directory not found -> $source_dir" >&2
+        exit 1
+    fi
+done
+
+mkdir -p "$PACKAGES_DIR" "$CPACK_WORK_ROOT"
+
+for source_dir in "${SOURCE_REPOS[@]}"; do
+    project_name="$(basename "$source_dir")"
+    repo_dir="$STAGING_ROOT/$project_name"
+    build_dir="$repo_dir/build"
+    cpack_dir="$CPACK_WORK_ROOT/$project_name"
+
+    echo "=================================================="
+    echo "  Building: $project_name"
+    echo "=================================================="
+
+    cp -a "$source_dir" "$repo_dir"
+    sudo rm -rf "$build_dir"
+    mkdir -p "$cpack_dir"
+
+    cmake_args=(
+        -S "$repo_dir"
+        -B "$build_dir"
+        -DCMAKE_INSTALL_PREFIX=/usr
+        -DCMAKE_BUILD_TYPE=Release
+        -DCPACK_DEBIAN_PACKAGE_ARCHITECTURE="$TARGET_ARCH"
+    )
+
+    if [[ -n "$PACKAGE_VERSION" ]]; then
+        cmake_args+=("-DCPACK_PACKAGE_VERSION=$PACKAGE_VERSION")
+    fi
+
+    cmake "${cmake_args[@]}"
+    cmake --build "$build_dir" --parallel "$(nproc)"
+    (
+        cd "$cpack_dir"
+        cpack --config "$build_dir/CPackConfig.cmake" -G DEB -C Release -B "$cpack_dir"
+    )
+
+    mapfile -t package_files < <(find "$cpack_dir" -maxdepth 1 -type f -name '*.deb' -print)
+    if (( ${#package_files[@]} == 0 )); then
+        echo "Error: CPack did not produce a Debian package for $project_name" >&2
+        exit 1
+    fi
+
+    cp -- "${package_files[@]}" "$PACKAGES_DIR/"
+    rm -rf "$cpack_dir"
+
+done
+
+echo "All Debian packages were staged in $PACKAGES_DIR."
