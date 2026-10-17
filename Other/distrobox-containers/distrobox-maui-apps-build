@@ -16,7 +16,8 @@ if [[ -z "$USER_HOME" || "$USER_HOME" == / ]]; then
 fi
 
 
-# -- Make Qt 6 development tools visible to Meson.
+# MauiKit applications MUST be built with CMake and ECM.
+# NEVER build MauiKit software using Meson; its QML module generation is incomplete.
 
 export PATH="/usr/lib/qt6/bin:/usr/lib/qt6/libexec:$PATH"
 
@@ -24,6 +25,7 @@ export PATH="/usr/lib/qt6/bin:/usr/lib/qt6/libexec:$PATH"
 # -- Directories to build in dependency order.
 
 REPOS=(
+    "$USER_HOME/Build/mauikit-demo"
     "$USER_HOME/GitHub/Nitrux/maui-buho"
     "$USER_HOME/GitHub/Nitrux/maui-clip"
     "$USER_HOME/GitHub/Nitrux/maui-fiery"
@@ -54,9 +56,11 @@ done
 DEB_HOST_MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 INSTALL_PREFIX=/usr
 
-meson_args=(--prefix="$INSTALL_PREFIX" --libdir="lib/$DEB_HOST_MULTIARCH" --buildtype=release)
-if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
-    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+cmake_args=(-DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+            -DKDE_INSTALL_LIBDIR="lib/$DEB_HOST_MULTIARCH"
+            -DCMAKE_BUILD_TYPE=Release)
+if [[ "$(dpkg-architecture -qDEB_HOST_ARCH)" == "amd64" ]]; then
+    cmake_args+=(-DCMAKE_CXX_FLAGS=-march=x86-64-v3)
 fi
 
 for dir in "${REPOS[@]}"; do
@@ -69,14 +73,8 @@ for dir in "${REPOS[@]}"; do
 
     sudo rm -rf -- "$build_dir"
 
-    if [[ -f "$dir/meson.build" ]]; then
-        meson setup "$build_dir" "$dir" "${meson_args[@]}"
-        meson compile -C "$build_dir" -j"$(nproc)"
-        sudo env --unset=DESTDIR meson install -C "$build_dir"
-    elif [[ -f "$dir/CMakeLists.txt" ]]; then
-        cmake -S "$dir" -B "$build_dir" \
-            -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-            -DCMAKE_BUILD_TYPE=Release
+    if [[ -f "$dir/CMakeLists.txt" ]]; then
+        cmake -S "$dir" -B "$build_dir" "${cmake_args[@]}"
         cmake --build "$build_dir" --parallel "$(nproc)"
         sudo env --unset=DESTDIR cmake --install "$build_dir"
     else

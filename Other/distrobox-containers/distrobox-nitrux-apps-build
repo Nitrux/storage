@@ -16,7 +16,8 @@ if [[ -z "$USER_HOME" || "$USER_HOME" == / ]]; then
 fi
 
 
-# -- Make Qt 6 development tools visible to Meson.
+# Nitrux MauiKit applications MUST be built with CMake and ECM; NEVER use Meson.
+# -- Make Qt 6 development tools visible to CMake and ECM.
 
 export PATH="/usr/lib/qt6/bin:/usr/lib/qt6/libexec:$PATH"
 
@@ -53,12 +54,14 @@ for dir in "${REPOS[@]}"; do
     fi
 done
 
-DEB_HOST_MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 INSTALL_PREFIX=/usr
 
-meson_args=(--prefix="$INSTALL_PREFIX" --libdir="lib/$DEB_HOST_MULTIARCH" --buildtype=release)
+cmake_args=(
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+    -DCMAKE_BUILD_TYPE=Release
+)
 if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
-    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+    cmake_args+=(-DCMAKE_CXX_FLAGS=-march=x86-64-v3)
 fi
 
 for dir in "${REPOS[@]}"; do
@@ -69,22 +72,27 @@ for dir in "${REPOS[@]}"; do
     echo "  Building: $project_name"
     echo "=================================================="
 
+    project_cmake_args=("${cmake_args[@]}")
+    case "$project_name" in
+        marina|valenz|xdg-desktop-portal-nx)
+            # These projects use GNUInstallDirs and do not consume KDE_INSTALL_LIBDIR.
+            ;;
+        *)
+            project_cmake_args+=(
+                -DKDE_INSTALL_LIBDIR="lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)")
+            ;;
+    esac
+
     sudo rm -rf -- "$build_dir"
 
-    if [[ -f "$dir/meson.build" ]]; then
-        meson setup "$build_dir" "$dir" "${meson_args[@]}"
-        meson compile -C "$build_dir" -j"$(nproc)"
-        sudo env --unset=DESTDIR meson install -C "$build_dir"
-    elif [[ -f "$dir/CMakeLists.txt" ]]; then
-        cmake -S "$dir" -B "$build_dir" \
-            -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-            -DCMAKE_BUILD_TYPE=Release
-        cmake --build "$build_dir" --parallel "$(nproc)"
-        sudo env --unset=DESTDIR cmake --install "$build_dir"
-    else
-        echo "Error: No supported build system found in $dir" >&2
+    if [[ ! -f "$dir/CMakeLists.txt" ]]; then
+        echo "Error: CMakeLists.txt not found in $dir" >&2
         exit 1
     fi
+
+    cmake -S "$dir" -B "$build_dir" "${project_cmake_args[@]}"
+    cmake --build "$build_dir" --parallel "$(nproc)"
+    sudo env --unset=DESTDIR cmake --install "$build_dir"
 
     echo ""
 done

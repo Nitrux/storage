@@ -166,7 +166,8 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libxcursor-dev
     libyaml-cpp-dev
     lintian
-    meson
+    cmake
+    extra-cmake-modules
     micro
     nlohmann-json3-dev
     ninja-build

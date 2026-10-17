@@ -12,7 +12,8 @@ USER_NAME="${SUDO_USER:-$USER}"
 USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 
 
-# -- Make Qt 6 development tools visible to Meson.
+# MauiKit and every MauiKit component MUST be built with CMake and ECM.
+# NEVER build this software using Meson; its QML module generation is incomplete.
 
 export PATH="/usr/lib/qt6/bin:/usr/lib/qt6/libexec:$PATH"
 
@@ -45,9 +46,11 @@ trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT
 DEB_HOST_MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 INSTALL_PREFIX=/usr
 
-meson_args=(--prefix="$INSTALL_PREFIX" --libdir="lib/$DEB_HOST_MULTIARCH" --buildtype=release)
-if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
-    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+cmake_args=(-DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+            -DKDE_INSTALL_LIBDIR="lib/$DEB_HOST_MULTIARCH"
+            -DCMAKE_BUILD_TYPE=Release)
+if [[ "$(dpkg-architecture -qDEB_HOST_ARCH)" == "amd64" ]]; then
+    cmake_args+=(-DCMAKE_CXX_FLAGS=-march=x86-64-v3)
 fi
 
 for dir in "${REPOS[@]}"; do
@@ -62,9 +65,18 @@ for dir in "${REPOS[@]}"; do
 
     sudo rm -rf "$dir/build"
 
-    meson setup "$dir/build" "$dir" "${meson_args[@]}"
-    meson compile -C "$dir/build" -j"$(nproc)"
-    sudo env --unset=DESTDIR meson install -C "$dir/build"
+    cmake -S "$dir" -B "$dir/build" "${cmake_args[@]}"
+    cmake --build "$dir/build" --parallel "$(nproc)"
+    sudo env --unset=DESTDIR cmake --install "$dir/build"
+
+    if [[ "$(basename "$dir")" == "mauikit-src" ]]; then
+        style_qmldir="/usr/lib/$DEB_HOST_MULTIARCH/qt6/qml/org/mauikit/style/qmldir"
+        style_plugin="/usr/lib/$DEB_HOST_MULTIARCH/qt6/qml/org/mauikit/style/libMauiStyle.so"
+        if [[ ! -f "$style_qmldir" || ! -f "$style_plugin" ]]; then
+            echo "Error: MauiKit style QML module was not installed at $style_qmldir" >&2
+            exit 1
+        fi
+    fi
 
     echo ""
 done
