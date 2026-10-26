@@ -182,6 +182,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     qt6-declarative-dev
     qt6-declarative-private-dev
     qt6-image-formats-plugins
+    qt6-location-dev
     qt6-multimedia-dev
     qt6-positioning-dev
     qt6-svg-dev
