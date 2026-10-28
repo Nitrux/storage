@@ -92,6 +92,7 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     curl
     devscripts
     equivs
+    extra-cmake-modules
     ffmpeg
     ffmpegthumbs
     gettext
@@ -159,18 +160,15 @@ INSTALL_BUILD_MAUIKIT_PKGS=(
     libtag1-dev
     libtesseract-dev
     libvorbis-dev
-    libwildmidi-dev
     libwayland-dev
+    libwildmidi-dev
     libxcb-icccm4-dev
     libxcb-shape0-dev
     libxcursor-dev
     libyaml-cpp-dev
     lintian
-    cmake
-    extra-cmake-modules
     micro
     nlohmann-json3-dev
-    ninja-build
     qcoro-qt6-dev
     qml6-module-qt5compat-graphicaleffects
     qml6-module-qtquick-controls
