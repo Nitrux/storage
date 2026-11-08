@@ -45,32 +45,25 @@ add_nitrux_key testing
 cp "$PWD"/container-setup/configs/files/sources/{debian,nitrux-mauikit}.sources /etc/apt/sources.list.d/
 
 
-# -- Neutralize systemd-tmpfiles completely.
-#   -- When apt installs or upgrades systemd, dpkg executes the package maintainer script (postinst). 
-#   -- This script runs systemd-tmpfiles --create to set strict ownership and permissions on system directories.
-#   -- The configuration file /usr/lib/tmpfiles.d/tmp.conf instructs systemd-tmpfiles to manage /tmp. 
-#   -- Because Distrobox bind-mounts the host /tmp directory into the container, the kernel blocks an unprivileged user namespace from altering host mount permissions.
-#   -- Systemd treats this failure as fatal, causing dpkg to exit with an error.
-
-dpkg_divert /usr/bin/systemd-tmpfiles
-ln -sf /bin/true /usr/bin/systemd-tmpfiles
-
-
-# -- Divert rev while util-linux and bsdextrautils transition ownership.
-#   -- Older util-linux packages own /usr/bin/rev, while newer bsdextrautils packages install the same path.
-#   -- Record the diversion without renaming the existing executable because util-linux marks it Essential.
-
-dpkg-divert --local --no-rename --add /usr/bin/rev
-
 
 # -- Refresh package indexes after all diversions are registered.
 
 update
 
 
-# -- Align libexpat with the testing snapshot before the full upgrade.
+# -- Align toolchain with the testing snapshot before the full upgrade.
 
-install_downgrades libexpat1=2.9.0-1
+DOWNGRADE_PKGS=(
+    "libatomic1=16.2.0-3"
+    "libgcc-s1=16.2.0-3"
+    "libstdc++6=16.2.0-3"
+    "gcc-16-base=16.2.0-3"
+    "libexpat1=2.9.0-1"
+    "libcom-err2=1.47.4-1+b2"
+    "libharfbuzz0b=12.3.2-2+b2"
+)
+
+install_downgrades "${DOWNGRADE_PKGS[@]}"
 
 
 # -- Upgrade rootfs packages as a coordinated dependency transition.
